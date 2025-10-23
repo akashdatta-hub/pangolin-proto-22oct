@@ -1,62 +1,77 @@
 /**
  * Microsoft Clarity Analytics Wrapper
- * Type-safe wrapper for Clarity API calls
+ * Uses official @microsoft/clarity npm package
  */
 
-export type ClarityMethod = 'event' | 'set' | 'identify' | 'consent' | 'upgrade';
-
-// Extend Window interface for Clarity
-declare global {
-  interface Window {
-    clarity?: (method: ClarityMethod, ...args: any[]) => void;
-  }
-}
+import Clarity from '@microsoft/clarity';
 
 /**
- * Safe wrapper for Clarity API calls
- * Prevents crashes if Clarity fails to load
+ * Initialize Microsoft Clarity
+ * Call this once when your app starts
  */
-export function clarityCall(method: ClarityMethod, ...args: any[]): void {
-  if (typeof window !== 'undefined' && window.clarity) {
+export function initializeClarity(projectId: string): void {
+  if (typeof window !== 'undefined') {
     try {
-      window.clarity(method, ...args);
+      Clarity.init(projectId);
+      console.log('✅ Microsoft Clarity initialized successfully');
     } catch (error) {
-      console.warn('Clarity call failed:', method, error);
+      console.error('❌ Failed to initialize Clarity:', error);
     }
   }
 }
 
 /**
- * Track a custom event
+ * Track a custom event with optional data
  */
 export function trackEvent(eventName: string, data?: Record<string, string | number | boolean>): void {
-  // Set tags first if data provided
-  if (data) {
-    Object.entries(data).forEach(([key, value]) => {
-      clarityCall('set', key, String(value));
-    });
+  try {
+    console.log('📊 Tracking event:', eventName, data);
+
+    // Set tags first if data provided
+    if (data) {
+      Object.entries(data).forEach(([key, value]) => {
+        Clarity.setTag(key, String(value));
+      });
+    }
+
+    // Fire the event
+    Clarity.event(eventName);
+  } catch (error) {
+    console.warn('Failed to track event:', eventName, error);
   }
-  // Then fire the event
-  clarityCall('event', eventName);
 }
 
 /**
  * Set a custom tag/dimension
  */
 export function setTag(key: string, value: string | number | boolean): void {
-  clarityCall('set', key, String(value));
+  try {
+    console.log('🏷️ Setting tag:', key, '=', value);
+    Clarity.setTag(key, String(value));
+  } catch (error) {
+    console.warn('Failed to set tag:', key, error);
+  }
 }
 
 /**
  * Identify a user (optional, for future use)
  */
 export function identifyUser(userId: string, sessionId?: string, pageId?: string): void {
-  clarityCall('identify', userId, sessionId, pageId);
+  try {
+    Clarity.identify(userId, sessionId, pageId);
+  } catch (error) {
+    console.warn('Failed to identify user:', error);
+  }
 }
 
 /**
  * Upgrade session priority (for important events like errors)
  */
 export function upgradeSession(reason: string): void {
-  clarityCall('upgrade', reason);
+  try {
+    console.log('⬆️ Upgrading session:', reason);
+    Clarity.upgrade(reason);
+  } catch (error) {
+    console.warn('Failed to upgrade session:', error);
+  }
 }

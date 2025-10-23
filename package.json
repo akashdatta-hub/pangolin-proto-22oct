@@ -15,6 +15,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@microsoft/clarity": "^1.0.0",
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
     "react": "^19.1.1",

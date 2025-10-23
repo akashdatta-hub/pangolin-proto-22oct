@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { trackEvent, setTag, upgradeSession } from '../utils/clarity';
+import { initializeClarity, trackEvent, setTag, upgradeSession } from '../utils/clarity';
 import type { Language } from '../types';
 
 /**
@@ -49,8 +49,14 @@ const APP_ENV = import.meta.env.MODE === 'production' ? 'prod' : 'dev';
 export function AnalyticsProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
 
-  // Initialize global tags on mount
+  // Initialize Clarity on mount
   useEffect(() => {
+    const CLARITY_PROJECT_ID = 'tuj5ywlqbp';
+
+    // Initialize Clarity with project ID
+    initializeClarity(CLARITY_PROJECT_ID);
+
+    // Set global tags
     setTag('app_env', APP_ENV);
     setTag('build_sha', BUILD_SHA.slice(0, 7));
     setTag('story_id', 'kite-festival'); // Default story
