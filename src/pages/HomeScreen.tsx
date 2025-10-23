@@ -6,22 +6,46 @@ import {
   Card,
   CardContent,
   Stack,
+  Tooltip,
 } from '@mui/material';
 import { PlayArrow } from '@mui/icons-material';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
 import { stories } from '../data/stories';
-import { colors } from '../theme/theme';
+import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
 
 export const HomeScreen = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
+  const { resetAllProgress } = useChallengeProgress();
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 100 });
   const [isHovering, setIsHovering] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const storyList = Object.values(stories);
+
+  // Reset all progress when returning to home screen
+  useEffect(() => {
+    resetAllProgress();
+  }, []);
+
+  // Check if image is already loaded or wait for load event
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img) {
+      if (img.complete) {
+        setImageLoaded(true);
+      } else {
+        const handleLoad = () => setImageLoaded(true);
+        img.addEventListener('load', handleLoad);
+        return () => img.removeEventListener('load', handleLoad);
+      }
+    }
+  }, []);
 
   const [gradientPosition, setGradientPosition] = useState({ x: 50, y: 100 }); // Default: bottom center
   const animationFrameRef = useRef<number | undefined>(undefined);
@@ -34,11 +58,17 @@ export const HomeScreen = () => {
       cancelAnimationFrame(animationFrameRef.current);
     }
 
+    // Store values before requestAnimationFrame
+    const target = e.currentTarget;
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+
     // Use requestAnimationFrame for smoother updates
     animationFrameRef.current = requestAnimationFrame(() => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * 100;
+      const y = ((clientY - rect.top) / rect.height) * 100;
 
       setMousePosition({ x, y });
       setGradientPosition({ x, y });
@@ -93,7 +123,7 @@ export const HomeScreen = () => {
             </Box>
 
             {/* Right: Language Selector */}
-            <Box>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
               <LanguageSelector />
             </Box>
           </Box>
@@ -124,12 +154,20 @@ export const HomeScreen = () => {
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  backgroundImage: 'url(/assets/story1-page1.jpg)',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
                   zIndex: 1,
                 }}
-              />
+              >
+                <img
+                  ref={imgRef}
+                  src="/assets/story1-page1.jpg"
+                  alt="Story background"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              </Box>
 
               {/* Layer 2: Gradient Overlay with spotlight effect */}
               <Box
@@ -227,29 +265,79 @@ export const HomeScreen = () => {
                     variant="contained"
                     startIcon={<PlayArrow />}
                     sx={{
-                      bgcolor: 'white',
-                      color: colors.primary.main,
+                      bgcolor: '#743799',
+                      color: '#FFFFFF',
                       textTransform: 'none',
                       fontSize: '24px',
                       fontWeight: 600,
                       py: 1.5,
                       px: 2,
-                      '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' },
+                      borderRadius: '100px',
+                      '&:hover': { bgcolor: '#5c2c7a' },
                     }}
                   >
                     {t('startStory')}
                   </Button>
 
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <img
-                        key={i}
-                        src="/assets/star-outline.svg"
-                        alt="Star"
-                        style={{ width: '24px', height: '24px' }}
-                      />
-                    ))}
-                  </Box>
+                  {/* Stars with Tooltip and Animation */}
+                  <Tooltip
+                    title={t('starsTooltip')}
+                    placement="top"
+                    arrow
+                    disableTouchListener
+                    slotProps={{
+                      tooltip: {
+                        sx: {
+                          bgcolor: colors.neutral[20],
+                          color: 'white',
+                          fontSize: '0.875rem',
+                          fontFamily: typography.fontFamily,
+                          py: 1,
+                          px: 1.5,
+                          borderRadius: 1,
+                          maxWidth: 250,
+                          boxShadow: 3,
+                          '& .MuiTooltip-arrow': {
+                            color: colors.neutral[20],
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      {[1, 2, 3, 4, 5].map((i) => {
+                        // Calculate normalized x position (0 to 1) for constellation sweep
+                        const normalizedX = (i - 1) / 4; // 0, 0.25, 0.5, 0.75, 1
+
+                        return (
+                          <Box
+                            key={i}
+                            sx={{
+                              opacity: 0,
+                              animation: imageLoaded ? 'fadeIn 200ms ease-in forwards' : 'none',
+                              animationDelay: imageLoaded ? `calc(${normalizedX} * 0.02s + ${i - 1} * 0.08s)` : '0s',
+                              '@keyframes fadeIn': {
+                                from: {
+                                  opacity: 0,
+                                  transform: 'scale(0.8)',
+                                },
+                                to: {
+                                  opacity: 1,
+                                  transform: 'scale(1)',
+                                },
+                              },
+                            }}
+                          >
+                            <img
+                              src="/assets/star-outline.svg"
+                              alt="Star"
+                              style={{ width: '48px', height: '48px', display: 'block' }}
+                            />
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  </Tooltip>
                 </Box>
                 </Box>
               </CardContent>
@@ -257,49 +345,56 @@ export const HomeScreen = () => {
           </Box>
 
           {/* Badge Card */}
-          <Box>
-            <Card
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'start' }}>
+            <Box
               sx={{
                 bgcolor: colors.tertiary.light,
                 borderRadius: 3,
-                position: 'sticky',
-                top: 20,
-                boxShadow: 'none',
+                px: 3,
+                py: 2,
+                textAlign: 'center',
+                display: 'inline-flex',
+                flexDirection: 'column',
+                alignItems: 'center',
               }}
             >
-              <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                <Box
-                  sx={{
-                    width: 120,
-                    height: 120,
-                    mx: 'auto',
-                    mb: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <img
-                    src="/assets/badge-word-explorer-visual.png"
-                    alt="Little Explorer Badge"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  />
-                </Box>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontFamily: typography.displayFont,
-                    color: colors.primary.dark,
-                    mb: 1,
-                  }}
-                >
-                  {t('littleExplorer')}
-                </Typography>
-                <Typography variant="body2" color={colors.neutral[30]}>
-                  {t('littleExplorerDesc')}
-                </Typography>
-              </CardContent>
-            </Card>
+              <Typography
+                variant="body1"
+                sx={{
+                  color: colors.primary.dark,
+                  mb: 1,
+                  fontWeight: 600,
+                }}
+              >
+                {t('collectThisBadge')}
+              </Typography>
+
+              <Box sx={{ width: '100%', height: '1px', bgcolor: 'divider', mb: 2 }} />
+
+              <Box
+                sx={{
+                  width: 120,
+                  height: 120,
+                  mb: 2,
+                }}
+              >
+                <img
+                  src="/assets/badge-word-explorer-visual.png"
+                  alt="Word explorer badge"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              </Box>
+
+              <Typography
+                variant="h6"
+                sx={{
+                  fontFamily: typography.displayFont,
+                  color: colors.primary.dark,
+                }}
+              >
+                {t('wordExplorer')}
+              </Typography>
+            </Box>
           </Box>
         </Box>
 
@@ -387,6 +482,3 @@ export const HomeScreen = () => {
     </Box>
   );
 };
-
-// Import typography for displayFont
-import { typography } from '../theme/theme';

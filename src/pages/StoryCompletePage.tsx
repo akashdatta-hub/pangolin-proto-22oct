@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Container,
@@ -7,14 +7,16 @@ import {
   IconButton,
   Divider,
 } from '@mui/material';
-import { VolumeUp, Star, StarBorder } from '@mui/icons-material';
+import { VolumeUp, Star, StarBorder, Close } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { speak, getSpeechLanguage } from '../utils/speech';
 import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
 import { stories } from '../data/stories';
 import { storyChallenges } from '../data/challenges';
+import { getSpeechMessage } from '../config/speechMessages';
 
 interface VocabularyWord {
   word: string;
@@ -40,34 +42,76 @@ export const StoryCompletePage = () => {
   // Calculate stars from context results (not URL params)
   const starsEarned = results.filter((r) => r.correct).length;
 
-  // Determine which badges to award
-  const earnedWordExplorer = !hasCompletedFirstStory; // First story completion
-  const earnedStrongStart = !hasEarnedStrongStart && (starsEarned === 4 || starsEarned === 5); // First time getting 4-5 stars
+  // CRITICAL FIX: Capture badge states on first mount using useRef
+  // This ensures we check the flags BEFORE the useEffect marks them as earned
+  const initialBadgeStates = useRef({
+    earnedWordExplorer: !hasCompletedFirstStory,
+    earnedStrongStart: !hasEarnedStrongStart && (starsEarned === 4 || starsEarned === 5),
+  });
 
-  // Text-to-Speech function
-  const speak = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langMap: Record<string, string> = { en: 'en-US', te: 'te-IN', hi: 'hi-IN' };
-      utterance.lang = langMap[language] || 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  // Use the captured initial states for display (won't change after mount)
+  const earnedWordExplorer = initialBadgeStates.current.earnedWordExplorer;
+  const earnedStrongStart = initialBadgeStates.current.earnedStrongStart;
 
-  // Auto-play congratulations message and mark badges as earned
+  // Debug logging
+  console.log('🏅 Badge Debug:', {
+    starsEarned,
+    results,
+    hasCompletedFirstStory,
+    hasEarnedStrongStart,
+    earnedWordExplorer,
+    earnedStrongStart,
+    showBadges: earnedWordExplorer || earnedStrongStart,
+    initialStates: initialBadgeStates.current,
+  });
+
+  // Auto-play congratulations message, then vocabulary prompt after 3 seconds
+  // Only run once when component mounts
   useEffect(() => {
-    speak(t('storyComplete'));
+    const playCompletionAudio = async () => {
+      // Get effective language with fallback (Telugu → Hindi if no Telugu voice)
+      const effectiveLang = getSpeechLanguage(language);
 
-    // Mark badges as earned (only on first completion)
+      // Determine which completion message based on stars earned
+      // Use effective language to get the correct text
+      let completionMessage: string;
+      if (starsEarned === 5) {
+        // Perfect score
+        completionMessage = getSpeechMessage('completion-perfect', effectiveLang);
+      } else if (starsEarned === 4) {
+        // Good score
+        completionMessage = getSpeechMessage('completion-good', effectiveLang);
+      } else {
+        // Needs practice (3 or less)
+        completionMessage = getSpeechMessage('completion-needs-practice', effectiveLang);
+      }
+
+      console.log('🔊 Story Complete - Speaking completion message:', completionMessage);
+      console.log('🔊 Stars earned:', starsEarned, 'Requested Language:', language, 'Effective Language:', effectiveLang);
+
+      await speak(completionMessage, language, 'completion');
+
+      // Wait 3 seconds after TTS finishes, then speak vocabulary prompt
+      setTimeout(() => {
+        const vocabularyPrompt = getSpeechMessage('completion-vocabulary-prompt', effectiveLang);
+        console.log('🔊 Story Complete - Speaking vocabulary prompt:', vocabularyPrompt);
+        speak(vocabularyPrompt, language, 'default');
+      }, 3000);
+    };
+
+    playCompletionAudio();
+
+    // Mark badges as earned AFTER we've captured the initial state
     if (earnedWordExplorer) {
+      console.log('✅ Marking Word Explorer badge as earned');
       markFirstStoryComplete();
     }
     if (earnedStrongStart) {
+      console.log('✅ Marking Strong Start badge as earned');
       markStrongStartEarned();
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps array means this only runs once on mount
 
   if (!story) {
     return (
@@ -158,7 +202,7 @@ export const StoryCompletePage = () => {
     >
       <IconButton
         size="small"
-        onClick={() => speak(word)}
+        onClick={() => speak(word, language, 'vocabulary-word')}
         sx={{
           bgcolor: isLearned ? colors.primary.main : '#D32F2F',
           color: 'white',
@@ -219,19 +263,27 @@ export const StoryCompletePage = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Top Bar - Language Selector */}
+          {/* Top Bar - Close button and Language Selector */}
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
               px: 3,
               py: 2,
               borderBottom: '1px solid',
               borderColor: 'divider',
             }}
           >
-            <LanguageSelector />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <IconButton onClick={() => navigate('/')} size="large">
+                <Close />
+              </IconButton>
+              <LanguageSelector />
+            </Box>
           </Box>
 
           {/* Main Content Area - Scrollable */}
@@ -239,10 +291,11 @@ export const StoryCompletePage = () => {
             sx={{
               flex: 1,
               overflowY: 'auto',
-              px: 6,
-              py: 4,
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
+            <Box sx={{ px: 6, py: 4 }}>
             {/* Title */}
             <Typography
               variant="h3"
@@ -274,7 +327,7 @@ export const StoryCompletePage = () => {
                     fontWeight: 400,
                   }}
                 >
-                  {learned.length} words learned in this story
+                  {learned.length} {t('wordsLearned')}
                 </Typography>
 
                 <Box sx={{ mb: 4 }}>
@@ -299,7 +352,7 @@ export const StoryCompletePage = () => {
                         fontWeight: 400,
                       }}
                     >
-                      {missed.length} more {missed.length === 1 ? 'word' : 'words'} to learn in this story
+                      {missed.length} {t('moreWordsToLearn')}
                     </Typography>
 
                     <Box>
@@ -351,7 +404,7 @@ export const StoryCompletePage = () => {
                     ))}
                   </Box>
                   <Typography variant="body2" color={colors.neutral[40]}>
-                    {starsEarned} of 5 stars collected
+                    {starsEarned} {t('of')} 5 {t('starsCollected')}
                   </Typography>
                 </Box>
 
@@ -380,7 +433,7 @@ export const StoryCompletePage = () => {
                             fontWeight: 600,
                           }}
                         >
-                          You collected a badge!
+                          {t('youCollectedBadge')}
                         </Typography>
 
                         <Divider sx={{ width: '100%', mb: 2 }} />
@@ -407,10 +460,10 @@ export const StoryCompletePage = () => {
                             mb: 0.5,
                           }}
                         >
-                          Word Explorer
+                          {t('wordExplorer')}
                         </Typography>
                         <Typography variant="body2" color={colors.neutral[40]}>
-                          Completed your first story
+                          {t('wordExplorerDesc')}
                         </Typography>
                       </Box>
                     )}
@@ -437,7 +490,7 @@ export const StoryCompletePage = () => {
                             fontWeight: 600,
                           }}
                         >
-                          You collected a badge!
+                          {t('youCollectedBadge')}
                         </Typography>
 
                         <Divider sx={{ width: '100%', mb: 2 }} />
@@ -464,16 +517,17 @@ export const StoryCompletePage = () => {
                             mb: 0.5,
                           }}
                         >
-                          Strong Start
+                          {t('strongStart')}
                         </Typography>
                         <Typography variant="body2" color={colors.neutral[40]}>
-                          Earned 4 or 5 stars on a story
+                          {t('strongStartDesc')}
                         </Typography>
                       </Box>
                     )}
                   </>
                 )}
               </Box>
+            </Box>
             </Box>
           </Box>
 
@@ -485,37 +539,42 @@ export const StoryCompletePage = () => {
               bgcolor: 'white',
               px: 3,
               py: 2,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
             }}
           >
-            <Typography
-              variant="subtitle1"
+            <Box
               sx={{
-                fontFamily: typography.displayFont,
-                color: colors.neutral[20],
-                fontWeight: 400,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              {t('lastChallenge')}
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => navigate('/vocabulary-test')}
-              sx={{
-                bgcolor: colors.primary.main,
-                color: 'white',
-                textTransform: 'none',
-                px: 4,
-                py: 1.5,
-                fontSize: '1.1rem',
-                borderRadius: 3,
-                '&:hover': { bgcolor: colors.primary.dark },
-              }}
-            >
-              Answer 3 questions
-            </Button>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontFamily: typography.displayFont,
+                  color: colors.neutral[20],
+                  fontWeight: 400,
+                }}
+              >
+                {t('lastChallenge')}
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={() => navigate('/vocabulary-test')}
+                sx={{
+                  bgcolor: colors.primary.main,
+                  color: 'white',
+                  textTransform: 'none',
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  borderRadius: 3,
+                  '&:hover': { bgcolor: colors.primary.dark },
+                }}
+              >
+                Answer 3 questions
+              </Button>
+            </Box>
           </Box>
         </Container>
       </Box>

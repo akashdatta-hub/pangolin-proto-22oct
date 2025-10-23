@@ -38,23 +38,26 @@ export const ProgressBar = ({ currentPosition, totalPositions, challengeResults 
             width: 120,
             height: 8,
             position: 'relative',
-            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
             borderRadius: 1,
           }}
         >
           <svg
             width="120"
-            height="8"
-            viewBox="0 0 120 8"
+            height="12"
+            viewBox="-4 0 128 12"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
-            style={{ display: 'block' }}
+            preserveAspectRatio="none"
+            style={{ display: 'block', width: '100%', height: '8px' }}
           >
             <path
-              d="M0 4 Q 10 1, 20 4 T 40 4 T 60 4 T 80 4 T 100 4 T 120 4"
+              d="M0 6 Q 5 3, 10 6 T 20 6 T 30 6 T 40 6 T 50 6 T 60 6 T 70 6 T 80 6 T 90 6 T 100 6 T 110 6 T 120 6"
               stroke={colors.primary.main}
               strokeWidth="8"
               fill="none"
+              strokeLinecap="round"
             />
           </svg>
         </Box>

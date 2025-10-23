@@ -15,7 +15,11 @@ export const ChallengePage = () => {
     challengeNumber: string;
   }>();
   const navigate = useNavigate();
-  const { recordResult, getStoryResults } = useChallengeProgress();
+  const { recordResult, getStoryResults, getFailedChallenges } = useChallengeProgress();
+
+  // Check if this is a revisit (URL will contain ?revisit=true)
+  const searchParams = new URLSearchParams(window.location.search);
+  const isRevisit = searchParams.get('revisit') === 'true';
 
   const storyChallenge = storyChallenges[storyId || ''];
   const currentChallengeIndex = parseInt(challengeNumber || '1') - 1;
@@ -30,28 +34,52 @@ export const ChallengePage = () => {
   }
 
   const handleChallengeComplete = (success: boolean) => {
-    // After each challenge, go to the next story page
-    const nextPageNumber = currentChallengeIndex + 2; // challengeNumber is 1-indexed
+    // Record result in context
+    if (storyId) {
+      console.log(`📝 Recording result: storyId=${storyId}, challenge=${currentChallengeIndex}, success=${success}, isRevisit=${isRevisit}`);
+      recordResult(storyId, currentChallengeIndex, success);
+    }
 
-    // Check if there's a next page
-    const totalPages = 5; // Kite Festival has 5 pages
-    if (nextPageNumber <= totalPages) {
-      // Record result in context
-      if (storyId) {
-        recordResult(storyId, currentChallengeIndex, success);
+    // If this is a revisit, handle differently
+    if (isRevisit) {
+      // Get remaining failed challenges
+      const remainingFailed = getFailedChallenges(storyId || '').filter(
+        (idx) => idx !== currentChallengeIndex
+      );
+
+      if (remainingFailed.length > 0) {
+        // Navigate to next failed challenge
+        const nextFailedIndex = remainingFailed[0];
+        navigate(`/story/${storyId}/challenge/${nextFailedIndex + 1}?revisit=true`);
+      } else {
+        // No more revisits, go to complete screen
+        navigate(`/story/${storyId}/complete`);
       }
+      return;
+    }
+
+    // Normal flow (not a revisit)
+    const nextPageNumber = currentChallengeIndex + 2; // challengeNumber is 1-indexed
+    const totalPages = 5; // Kite Festival has 5 pages
+
+    if (nextPageNumber <= totalPages) {
       // Go to next story page
       navigate(`/story/${storyId}/page/${nextPageNumber}`);
     } else {
-      // Last challenge - record result and navigate to completion screen
-      // Star calculation will happen on StoryCompletePage by reading from context
-      if (storyId) {
-        recordResult(storyId, currentChallengeIndex, success);
-      }
+      // Last challenge (challenge 5) completed
+      // Check if there are any failed challenges that need revisiting
+      const failedChallenges = getFailedChallenges(storyId || '');
 
-      // Navigate to Story Complete screen
-      // Don't pass stars in URL - let the complete page calculate from context
-      navigate(`/story/${storyId}/complete`);
+      if (failedChallenges.length > 0) {
+        // Navigate to first failed challenge for revisit
+        const firstFailedIndex = failedChallenges[0];
+        console.log(`🔄 Revisiting failed challenge ${firstFailedIndex + 1}`);
+        navigate(`/story/${storyId}/challenge/${firstFailedIndex + 1}?revisit=true`);
+      } else {
+        // No failed challenges, go straight to complete screen
+        console.log(`📊 All results after final challenge:`, getStoryResults(storyId || ''));
+        navigate(`/story/${storyId}/complete`);
+      }
     }
   };
 
@@ -60,6 +88,7 @@ export const ChallengePage = () => {
     challengeNumber: currentChallengeIndex + 1,
     totalChallenges: storyChallenge.challenges.length,
     onComplete: handleChallengeComplete,
+    isRevisit,
   };
 
   // Render appropriate challenge component based on type

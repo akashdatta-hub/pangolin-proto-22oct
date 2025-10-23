@@ -8,6 +8,7 @@ interface ChallengeBottomButtonsProps {
   onCheckAnswer: () => void;
   checkAnswerDisabled?: boolean;
   checkAnswerLabel?: string; // Optional custom label (defaults to "Check Answer")
+  onSkip?: () => void; // Optional skip button for revisits
 }
 
 export const ChallengeBottomButtons = ({
@@ -15,6 +16,7 @@ export const ChallengeBottomButtons = ({
   onCheckAnswer,
   checkAnswerDisabled = false,
   checkAnswerLabel,
+  onSkip,
 }: ChallengeBottomButtonsProps) => {
   const { t } = useLanguage();
 
@@ -42,24 +44,44 @@ export const ChallengeBottomButtons = ({
         {t('back')}
       </Button>
 
-      <Button
-        variant="contained"
-        startIcon={<Check />}
-        onClick={onCheckAnswer}
-        disabled={checkAnswerDisabled}
-        sx={{
-          bgcolor: colors.primary.main,
-          color: 'white',
-          textTransform: 'none',
-          px: 4,
-          py: 1.5,
-          fontSize: '1.1rem',
-          borderRadius: 3,
-          '&:hover': { bgcolor: colors.primary.dark },
-        }}
-      >
-        {checkAnswerLabel || t('checkAnswer')}
-      </Button>
+      <Box sx={{ display: 'flex', gap: 2 }}>
+        {onSkip && (
+          <Button
+            variant="outlined"
+            onClick={onSkip}
+            sx={{
+              borderColor: colors.neutral[80],
+              color: colors.neutral[40],
+              textTransform: 'none',
+              px: 4,
+              py: 1.5,
+              fontSize: '1.1rem',
+              borderRadius: 3,
+            }}
+          >
+            {t('skip')}
+          </Button>
+        )}
+
+        <Button
+          variant="contained"
+          startIcon={<Check />}
+          onClick={onCheckAnswer}
+          disabled={checkAnswerDisabled}
+          sx={{
+            bgcolor: colors.primary.main,
+            color: 'white',
+            textTransform: 'none',
+            px: 4,
+            py: 1.5,
+            fontSize: '1.1rem',
+            borderRadius: 3,
+            '&:hover': { bgcolor: colors.primary.dark },
+          }}
+        >
+          {checkAnswerLabel || t('checkAnswer')}
+        </Button>
+      </Box>
     </Box>
   );
 };

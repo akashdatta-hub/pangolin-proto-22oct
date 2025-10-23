@@ -1,4 +1,4 @@
-import { Box, IconButton, Menu, MenuItem } from '@mui/material';
+import { Box, IconButton, Menu, MenuItem, Typography } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
 import { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -8,6 +8,12 @@ const languageNames: Record<Language, string> = {
   en: 'English',
   te: 'తెలుగు',
   hi: 'हिंदी',
+};
+
+const languageCodes: Record<Language, string> = {
+  en: 'ENG',
+  te: 'TEL',
+  hi: 'HIN',
 };
 
 export const LanguageSelector = () => {
@@ -28,7 +34,17 @@ export const LanguageSelector = () => {
   };
 
   return (
-    <Box>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <Typography
+        sx={{
+          fontSize: '14px',
+          fontFamily: 'Open Sans, sans-serif',
+          color: '#9E9E9E',
+          fontWeight: 400,
+        }}
+      >
+        {languageCodes[language]}
+      </Typography>
       <IconButton
         onClick={handleClick}
         sx={{

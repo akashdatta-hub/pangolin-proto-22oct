@@ -7,26 +7,11 @@ import { stories } from '../data/stories';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
 import { ProgressBar } from '../components/ProgressBar';
-import { useState } from 'react';
-
-// Text-to-Speech function
-const speak = (text: string, lang: string) => {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel(); // Stop any ongoing speech
-    const utterance = new SpeechSynthesisUtterance(text);
-
-    // Map language codes to speech synthesis voices
-    const langMap: Record<string, string> = {
-      en: 'en-US',
-      te: 'te-IN',
-      hi: 'hi-IN',
-    };
-
-    utterance.lang = langMap[lang] || 'en-US';
-    utterance.rate = 0.9; // Slightly slower for learning
-    window.speechSynthesis.speak(utterance);
-  }
-};
+import { useState, useEffect } from 'react';
+import { speak, getSpeechLanguage } from '../utils/speech';
+import { getSpeechMessage } from '../config/speechMessages';
+import { getWordTranslation } from '../data/wordTranslations';
+import { uiLabels } from '../data/stories';
 
 export const StoryPage = () => {
   const { storyId, pageNumber } = useParams<{ storyId: string; pageNumber: string }>();
@@ -59,17 +44,54 @@ export const StoryPage = () => {
   // Split text into sentences for sentence-level audio
   const sentences = currentPage.text.match(/[^.!?]+[.!?]+/g) || [currentPage.text];
 
-  const handleWordClick = (word: string) => {
+  // Speak page intro when page opens: "Page X. Read this page. Click on the words to listen to them."
+  useEffect(() => {
+    const speakPageIntro = async () => {
+      // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+      const speechLang = getSpeechLanguage(language);
+
+      // Construct page intro message in the effective language
+      const pageNumberText = speechLang === 'en' ? `Page ${currentPageNum}`
+        : speechLang === 'hi' ? `पेज ${currentPageNum}`
+        : `పేజీ ${currentPageNum}`;
+
+      const readThisPage = uiLabels[speechLang as 'en' | 'te' | 'hi'].readThisPage;
+      const clickInstruction = uiLabels[speechLang as 'en' | 'te' | 'hi'].clickWordsInstruction;
+
+      const fullMessage = `${pageNumberText}. ${readThisPage}. ${clickInstruction}`;
+
+      await speak(fullMessage, speechLang, 'story-sentence');
+    };
+
+    speakPageIntro();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPageNum, language]);
+
+  const handleWordClick = async (word: string) => {
     // Extract only the core word, removing leading/trailing punctuation but keeping internal apostrophes/hyphens
     const cleanWord = word.trim().replace(/^["']+|["'.,!?;:—-]+$/g, '').toLowerCase();
     if (cleanWord) {
-      speak(cleanWord, language);
+      // Bilingual TTS: Speak in English first, then in selected language
+      // Always use Indian English voice
+      await speak(cleanWord, 'en', 'story-word');
+
+      // If selected language is not English, speak translation
+      if (language !== 'en') {
+        // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+        const speechLang = getSpeechLanguage(language);
+        const translation = getWordTranslation(cleanWord, speechLang as 'te' | 'hi');
+        // Wait a bit before speaking translation
+        setTimeout(() => {
+          speak(translation, speechLang, 'story-word');
+        }, 800); // 800ms delay between English and translation
+      }
+
       setClickedWords(new Set([...clickedWords, cleanWord]));
     }
   };
 
   const handleSentenceClick = (sentence: string) => {
-    speak(sentence, language);
+    speak(sentence, language, 'story-sentence');
   };
 
   const handleNext = () => {

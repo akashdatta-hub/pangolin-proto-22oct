@@ -11,6 +11,8 @@ import {
   Check,
 } from '@mui/icons-material';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import type { DrawingChallenge as DrawingChallengeType } from '../data/challenges';
 import { challengeLabels } from '../data/challenges';
@@ -18,12 +20,16 @@ import { ChallengeLayout } from './ChallengeLayout';
 import { ChallengeFeedback } from './ChallengeFeedback';
 import { ChallengeBottomButtons } from './ChallengeBottomButtons';
 import { HintModal } from './HintModal';
+import { RetryMistakeBadge } from './RetryMistakeBadge';
+import { getSpeechMessage } from '../config/speechMessages';
 
 interface DrawingChallengeProps {
   challenge: DrawingChallengeType;
+  storyId: string;
   challengeNumber: number;
   totalChallenges: number;
   onComplete: (success: boolean) => void;
+  isRevisit?: boolean;
 }
 
 type AttemptState = 'initial' | 'correct' | 'wrong-first' | 'wrong-second';
@@ -31,12 +37,15 @@ type CanvasState = 'empty' | 'correct' | 'wrong';
 
 export const DrawingChallenge = ({
   challenge,
+  storyId,
   challengeNumber,
   totalChallenges,
   onComplete,
+  isRevisit = false,
 }: DrawingChallengeProps) => {
   const navigate = useNavigate();
   const { language, t } = useLanguage();
+  const { markChallengeAsFailed, clearFailedChallenge } = useChallengeProgress();
   const canvasRefs = [
     useRef<HTMLCanvasElement>(null),
     useRef<HTMLCanvasElement>(null),
@@ -47,6 +56,18 @@ export const DrawingChallenge = ({
   const [currentColor, setCurrentColor] = useState('#000000');
   const [attemptState, setAttemptState] = useState<AttemptState>('initial');
   const [attemptCount, setAttemptCount] = useState(0);
+
+  // Speak challenge question when opening (no instruction for drawing)
+  useEffect(() => {
+    const speakChallengeIntro = async () => {
+      // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+      const speechLang = getSpeechLanguage(language);
+      const questionText = challenge.question[speechLang];
+      await speak(questionText, speechLang, 'default');
+    };
+
+    speakChallengeIntro();
+  }, [challenge, language]);
   const [hintModalOpen, setHintModalOpen] = useState(false);
   const [canvasStates, setCanvasStates] = useState<CanvasState[]>(['empty', 'empty', 'empty']);
   const [canvasLabels, setCanvasLabels] = useState<string[]>(['', '', '']);
@@ -60,17 +81,6 @@ export const DrawingChallenge = ({
     { color: '#F59E0B' },
   ];
 
-  // Text-to-Speech function
-  const speak = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langMap: Record<string, string> = { en: 'en-US', te: 'te-IN', hi: 'hi-IN' };
-      utterance.lang = langMap[language] || 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
 
   // Canvas drawing setup
   useEffect(() => {
@@ -175,16 +185,24 @@ export const DrawingChallenge = ({
       setCanvasStates(newStates);
       setCanvasLabels(newLabels);
 
+      // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+      const speechLang = getSpeechLanguage(language);
+
       // Handle attempts
       setAttemptCount(attemptCount + 1);
       if (attemptCount === 0) {
         setAttemptState('wrong-first');
-        speak(t('incorrect'));
+        const incorrectMessage = getSpeechMessage('challenge-incorrect-first', speechLang);
+        speak(incorrectMessage, speechLang, 'challenge-incorrect');
       } else {
         setAttemptState('wrong-second');
-        speak(t('incorrectSecond'));
+        const incorrectSecondMessage = getSpeechMessage('challenge-incorrect-second', speechLang);
+        speak(incorrectSecondMessage, speechLang, 'challenge-incorrect');
       }
     } else {
+      // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+      const speechLang = getSpeechLanguage(language);
+
       // All canvases have drawings - mark as correct
       const newStates: CanvasState[] = ['correct', 'correct', 'correct'];
       const newLabels = challenge.correctAnswers.map((answer, i) =>
@@ -195,7 +213,8 @@ export const DrawingChallenge = ({
       setCanvasLabels(newLabels);
 
       setAttemptState('correct');
-      speak(t('correct'));
+      const correctMessage = getSpeechMessage('challenge-correct-first', speechLang);
+      speak(correctMessage, speechLang, 'challenge-correct');
     }
   };
 
@@ -210,10 +229,21 @@ export const DrawingChallenge = ({
   };
 
   const handleSkip = () => {
+    // If user is on wrong-second (ran out of retries) and it's not a revisit,
+    // mark this challenge as failed for later revisit
+    if (attemptState === 'wrong-second' && !isRevisit) {
+      markChallengeAsFailed(storyId, challengeNumber - 1); // challengeNumber is 1-indexed
+      console.log(`❌ Challenge ${challengeNumber} marked as failed - will revisit after challenge 5`);
+    }
     onComplete(false);
   };
 
   const handleCollectStar = () => {
+    // If this is a revisit and they succeeded, clear it from failed challenges
+    if (isRevisit) {
+      clearFailedChallenge(storyId, challengeNumber - 1);
+      console.log(`✅ Challenge ${challengeNumber} cleared from failed list - earned star on revisit!`);
+    }
     onComplete(true);
   };
 
@@ -236,6 +266,7 @@ export const DrawingChallenge = ({
         <ChallengeBottomButtons
           onBack={() => window.history.back()}
           onCheckAnswer={handleSubmit}
+          onSkip={isRevisit ? handleSkip : undefined}
         />
       );
     }
@@ -245,7 +276,6 @@ export const DrawingChallenge = ({
         <ChallengeFeedback
           feedbackType="correct"
           onCollectStar={handleCollectStar}
-          customMessage={t('correctAnswer')}
         />
       );
     }
@@ -268,6 +298,11 @@ export const DrawingChallenge = ({
     <ChallengeLayout bottomBar={renderBottomBar()}>
       {/* Question */}
       <Box sx={{ px: 4, pt: 4, pb: 2 }}>
+        {isRevisit && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <RetryMistakeBadge />
+          </Box>
+        )}
         <Typography
           variant="h3"
           sx={{

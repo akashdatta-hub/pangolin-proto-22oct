@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -9,30 +9,39 @@ import {
   Chip,
 } from '@mui/material';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { ChallengeLayout } from './ChallengeLayout';
 import { ChallengeFeedback } from './ChallengeFeedback';
 import { ChallengeBottomButtons } from './ChallengeBottomButtons';
 import { HintModal } from './HintModal';
+import { RetryMistakeBadge } from './RetryMistakeBadge';
 import type { FillBlanksChallenge as FillBlanksChallengeType } from '../data/challenges';
 import { challengeLabels } from '../data/challenges';
+import { getSpeechMessage } from '../config/speechMessages';
 
 interface FillBlanksChallengeProps {
   challenge: FillBlanksChallengeType;
+  storyId: string;
   challengeNumber: number;
   totalChallenges: number;
   onComplete: (success: boolean) => void;
+  isRevisit?: boolean;
 }
 
 type AttemptState = 'initial' | 'correct' | 'wrong-first' | 'wrong-second';
 
 export const FillBlanksChallenge = ({
   challenge,
+  storyId,
   challengeNumber,
   totalChallenges,
   onComplete,
+  isRevisit = false,
 }: FillBlanksChallengeProps) => {
   const { language, t } = useLanguage();
+  const { checkAndCelebrateStreak, markChallengeAsFailed, clearFailedChallenge } = useChallengeProgress();
 
   // Calculate number of blanks
   const sentenceParts = challenge.sentence.split('{blank}');
@@ -44,19 +53,22 @@ export const FillBlanksChallenge = ({
   const [attemptCount, setAttemptCount] = useState(0);
   const [hintModalOpen, setHintModalOpen] = useState(false);
 
-  // Text-to-Speech function
-  const speak = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langMap: Record<string, string> = { en: 'en-US', te: 'te-IN', hi: 'hi-IN' };
-      utterance.lang = langMap[language] || 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
+  // Speak challenge question + instruction when opening
+  useEffect(() => {
+    const speakChallengeIntro = async () => {
+      // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+      const speechLang = getSpeechLanguage(language);
 
-  const handleSubmit = () => {
+      const questionText = challenge.question[speechLang];
+      const instruction = getSpeechMessage('instruction-fill-blanks', speechLang);
+      const fullMessage = `${questionText}. ${instruction}`;
+      await speak(fullMessage, speechLang, 'default');
+    };
+
+    speakChallengeIntro();
+  }, [challenge, language]);
+
+  const handleSubmit = async () => {
     const correctAnswers = Array.isArray(challenge.correctAnswer)
       ? challenge.correctAnswer
       : [challenge.correctAnswer];
@@ -66,22 +78,50 @@ export const FillBlanksChallenge = ({
       answer.trim().toLowerCase() === correctAnswers[index].toLowerCase()
     );
 
+    // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+    const speechLang = getSpeechLanguage(language);
+
     if (allCorrect) {
       setAttemptState('correct');
-      speak(challengeLabels[language].correct);
+
+      // Determine which correct message to use
+      let feedbackMessage: string;
+      if (attemptCount === 0) {
+        feedbackMessage = getSpeechMessage('challenge-correct-first', speechLang);
+      } else {
+        feedbackMessage = getSpeechMessage('challenge-correct-second', speechLang);
+      }
+
+      await speak(feedbackMessage, speechLang, 'challenge-correct');
+
+      // Check for streak celebration
+      const justHitStreak = checkAndCelebrateStreak();
+      if (justHitStreak) {
+        setTimeout(() => {
+          const streakMessage = getSpeechMessage('challenge-streak-3', speechLang);
+          speak(streakMessage, speechLang, 'challenge-correct');
+        }, 2000);
+      }
     } else {
       setAttemptCount(attemptCount + 1);
       if (attemptCount === 0) {
         setAttemptState('wrong-first');
-        speak(challengeLabels[language].incorrect);
+        const incorrectMessage = getSpeechMessage('challenge-incorrect-first', speechLang);
+        await speak(incorrectMessage, speechLang, 'challenge-incorrect');
       } else if (attemptCount >= 1) {
         setAttemptState('wrong-second');
-        speak(challengeLabels[language].incorrectSecond);
+        const incorrectSecondMessage = getSpeechMessage('challenge-incorrect-second', speechLang);
+        await speak(incorrectSecondMessage, speechLang, 'challenge-incorrect');
       }
     }
   };
 
   const handleCollectStar = () => {
+    // If this is a revisit and they succeeded, clear it from failed challenges
+    if (isRevisit) {
+      clearFailedChallenge(storyId, challengeNumber - 1);
+      console.log(`✅ Challenge ${challengeNumber} cleared from failed list - earned star on revisit!`);
+    }
     onComplete(true);
   };
 
@@ -100,6 +140,11 @@ export const FillBlanksChallenge = ({
       // If all are filled, replace the last one
       handleAnswerChange(answers.length - 1, word);
     }
+
+    // Speak the English word using the selected language's voice
+    // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+    const speechLang = getSpeechLanguage(language);
+    speak(word, speechLang, 'story-word');
   };
 
   const handleTryAgain = () => {
@@ -108,6 +153,12 @@ export const FillBlanksChallenge = ({
   };
 
   const handleSkip = () => {
+    // If user is on wrong-second (ran out of retries) and it's not a revisit,
+    // mark this challenge as failed for later revisit
+    if (attemptState === 'wrong-second' && !isRevisit) {
+      markChallengeAsFailed(storyId, challengeNumber - 1);
+      console.log(`❌ Challenge ${challengeNumber} marked as failed - will revisit after challenge 5`);
+    }
     onComplete(false);
   };
 
@@ -123,6 +174,7 @@ export const FillBlanksChallenge = ({
           onBack={() => window.history.back()}
           onCheckAnswer={handleSubmit}
           checkAnswerDisabled={!answers.every(a => a.trim())}
+          onSkip={isRevisit ? handleSkip : undefined}
         />
       );
     }
@@ -146,6 +198,11 @@ export const FillBlanksChallenge = ({
     <ChallengeLayout bottomBar={renderBottomBar()}>
       {/* Main Content */}
       <Box sx={{ px: 4, pt: 4, pb: 4, maxWidth: '65%', mx: 'auto', flex: 1 }}>
+        {isRevisit && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <RetryMistakeBadge />
+          </Box>
+        )}
         <Typography
           variant="h4"
           sx={{

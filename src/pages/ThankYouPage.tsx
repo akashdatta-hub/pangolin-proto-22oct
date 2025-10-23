@@ -4,11 +4,15 @@ import {
   Container,
   Typography,
   Button,
+  IconButton,
 } from '@mui/material';
+import { Close } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { speak } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
+import { getSpeechMessage } from '../config/speechMessages';
 
 export const ThankYouPage = () => {
   const navigate = useNavigate();
@@ -17,57 +21,24 @@ export const ThankYouPage = () => {
   const correctCount = parseInt(searchParams.get('correct') || '0');
   const totalQuestions = 3;
 
-  // Text-to-Speech function
-  const speak = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langMap: Record<string, string> = { en: 'en-US', te: 'te-IN', hi: 'hi-IN' };
-      utterance.lang = langMap[language] || 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
   // Auto-play thank you message
   useEffect(() => {
-    const message =
-      language === 'en'
-        ? 'Thank you for completing the test!'
-        : language === 'te'
-        ? 'పరీక్షను పూర్తి చేసినందుకు ధన్యవాదాలు!'
-        : 'परीक्षण पूरा करने के लिए धन्यवाद!';
-    speak(message);
-  }, []);
+    const message = getSpeechMessage('thankyou-intro', language);
+    speak(message, language, 'completion');
+  }, [language]);
 
   const percentage = Math.round((correctCount / totalQuestions) * 100);
   const isExcellent = percentage >= 80;
   const isGood = percentage >= 60;
 
   const getMessage = () => {
-    if (language === 'en') {
-      if (isExcellent) return 'Excellent work!';
-      if (isGood) return 'Good job!';
-      return 'Keep practicing!';
-    } else if (language === 'te') {
-      if (isExcellent) return 'అద్భుతమైన పని!';
-      if (isGood) return 'మంచి పని!';
-      return 'అభ్యాసం కొనసాగించండి!';
-    } else {
-      if (isExcellent) return 'उत्कृष्ट कार्य!';
-      if (isGood) return 'अच्छा काम!';
-      return 'अभ्यास जारी रखें!';
-    }
+    if (isExcellent) return getSpeechMessage('thankyou-excellent', language);
+    if (isGood) return getSpeechMessage('thankyou-good', language);
+    return getSpeechMessage('thankyou-keep-practicing', language);
   };
 
   const getDescription = () => {
-    if (language === 'en') {
-      return 'You have completed the Kite Festival story and vocabulary test. Thank you for participating in this learning experience!';
-    } else if (language === 'te') {
-      return 'మీరు పతంగాల పండుగ కథ మరియు పదజాల పరీక్షను పూర్తి చేసారు. ఈ అభ్యాస అనుభవంలో పాల్గొన్నందుకు ధన్యవాదాలు!';
-    } else {
-      return 'आपने पतंग महोत्सव की कहानी और शब्दावली परीक्षण पूरा कर लिया है। इस सीखने के अनुभव में भाग लेने के लिए धन्यवाद!';
-    }
+    return getSpeechMessage('thankyou-description', language);
   };
 
   return (
@@ -95,19 +66,27 @@ export const ThankYouPage = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Top Bar - Language Selector */}
+          {/* Top Bar - Close button and Language Selector */}
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
               px: 3,
               py: 2,
               borderBottom: '1px solid',
               borderColor: 'divider',
             }}
           >
-            <LanguageSelector />
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <IconButton onClick={() => navigate('/')} size="large">
+                <Close />
+              </IconButton>
+              <LanguageSelector />
+            </Box>
           </Box>
 
           {/* Main Content Area - Scrollable */}
@@ -183,10 +162,10 @@ export const ThankYouPage = () => {
                 }}
               >
                 {language === 'en'
-                  ? 'Thank You!'
+                  ? 'Thank You'
                   : language === 'te'
-                  ? 'ధన్యవాదాలు!'
-                  : 'धन्यवाद!'}
+                  ? 'ధన్యవాదాలు'
+                  : 'धन्यवाद'}
               </Typography>
 
               {/* Description */}
@@ -258,30 +237,35 @@ export const ThankYouPage = () => {
               bgcolor: 'white',
               px: 3,
               py: 2,
-              display: 'flex',
-              justifyContent: 'flex-end',
             }}
           >
-            <Button
-              variant="contained"
-              onClick={() => navigate('/')}
+            <Box
               sx={{
-                bgcolor: colors.primary.main,
-                color: 'white',
-                textTransform: 'none',
-                px: 4,
-                py: 1.5,
-                fontSize: '1.1rem',
-                borderRadius: 3,
-                '&:hover': { bgcolor: colors.primary.dark },
+                display: 'flex',
+                justifyContent: 'flex-end',
               }}
             >
-              {language === 'en'
-                ? 'Back to Home'
-                : language === 'te'
-                ? 'హోమ్‌కు తిరిగి వెళ్లండి'
-                : 'होम पर वापस जाएं'}
-            </Button>
+              <Button
+                variant="contained"
+                onClick={() => navigate('/')}
+                sx={{
+                  bgcolor: colors.primary.main,
+                  color: 'white',
+                  textTransform: 'none',
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  borderRadius: 3,
+                  '&:hover': { bgcolor: colors.primary.dark },
+                }}
+              >
+                {language === 'en'
+                  ? 'Back to Home'
+                  : language === 'te'
+                  ? 'హోమ్‌కు తిరిగి వెళ్లండి'
+                  : 'होम पर वापस जाएं'}
+              </Button>
+            </Box>
           </Box>
         </Container>
       </Box>

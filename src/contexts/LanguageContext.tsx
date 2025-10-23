@@ -14,7 +14,7 @@ export interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>('te');
 
   const t = (key: keyof typeof uiLabels.en): string => {
     return uiLabels[language][key] || uiLabels.en[key] || key;

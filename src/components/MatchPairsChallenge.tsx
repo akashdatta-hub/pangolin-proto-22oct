@@ -7,18 +7,24 @@ import {
 } from '@mui/material';
 import { CheckCircle, Star, PanTool, PlayArrow } from '@mui/icons-material';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { ChallengeLayout } from './ChallengeLayout';
 import { ChallengeBottomButtons } from './ChallengeBottomButtons';
 import { HintModal } from './HintModal';
+import { RetryMistakeBadge } from './RetryMistakeBadge';
 import type { MatchPairsChallenge as MatchPairsChallengeType } from '../data/challenges';
 import { challengeLabels } from '../data/challenges';
+import { getSpeechMessage } from '../config/speechMessages';
 
 interface MatchPairsChallengeProps {
   challenge: MatchPairsChallengeType;
+  storyId: string;
   challengeNumber: number;
   totalChallenges: number;
   onComplete: (success: boolean) => void;
+  isRevisit?: boolean;
 }
 
 type CardType = 'english' | 'translation';
@@ -32,11 +38,14 @@ interface CardItem {
 
 export const MatchPairsChallenge = ({
   challenge,
+  storyId,
   challengeNumber,
   totalChallenges,
   onComplete,
+  isRevisit = false,
 }: MatchPairsChallengeProps) => {
   const { language, t } = useLanguage();
+  const { checkAndCelebrateStreak, markChallengeAsFailed, clearFailedChallenge } = useChallengeProgress();
   const [cards, setCards] = useState<CardItem[]>([]);
   const [selectedCards, setSelectedCards] = useState<CardItem[]>([]);
   const [matchedPairs, setMatchedPairs] = useState<Set<string>>(new Set());
@@ -45,18 +54,25 @@ export const MatchPairsChallenge = ({
   const [wrongAttempts, setWrongAttempts] = useState(0);
   const [showWrongFeedback, setShowWrongFeedback] = useState(false);
   const [hintModalOpen, setHintModalOpen] = useState(false);
+  const [hasSpokenIntro, setHasSpokenIntro] = useState(false);
 
-  // Text-to-Speech function
-  const speak = (text: string) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      const langMap: Record<string, string> = { en: 'en-US', te: 'te-IN', hi: 'hi-IN' };
-      utterance.lang = langMap[language] || 'en-US';
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
+  // Speak challenge question + instruction when opening
+  useEffect(() => {
+    if (!hasSpokenIntro) {
+      const speakChallengeIntro = async () => {
+        // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+        const speechLang = getSpeechLanguage(language);
+
+        const questionText = challenge.question[speechLang];
+        const instruction = getSpeechMessage('instruction-match-pairs', speechLang);
+        const fullMessage = `${questionText}. ${instruction}`;
+        await speak(fullMessage, speechLang, 'default');
+        setHasSpokenIntro(true);
+      };
+
+      speakChallengeIntro();
     }
-  };
+  }, [challenge, language, hasSpokenIntro]);
 
   // Initialize cards - separate columns for English and translations
   useEffect(() => {
@@ -100,9 +116,13 @@ export const MatchPairsChallenge = ({
   };
 
   const checkMatch = (card1: CardItem, card2: CardItem) => {
+    // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
+    const speechLang = getSpeechLanguage(language);
+
     // Cards must be different types
     if (card1.type === card2.type) {
-      speak(challengeLabels[language].incorrect);
+      const incorrectMessage = getSpeechMessage('challenge-incorrect-first', speechLang);
+      speak(incorrectMessage, speechLang, 'challenge-incorrect');
       setWrongAttempts(wrongAttempts + 1);
       setTimeout(() => setSelectedCards([]), 800);
       return;
@@ -116,7 +136,8 @@ export const MatchPairsChallenge = ({
     const isMatch = challenge.pairs[pairIndex]?.translation === transCard.text;
 
     if (isMatch) {
-      speak(challengeLabels[language].matched);
+      const matchedMessage = getSpeechMessage('challenge-matched', speechLang);
+      speak(matchedMessage, speechLang, 'challenge-correct');
       const newMatched = new Set(matchedPairs);
       newMatched.add(card1.id);
       newMatched.add(card2.id);
@@ -132,11 +153,13 @@ export const MatchPairsChallenge = ({
 
       // Check if all matched
       if (newMatched.size === cards.length) {
-        speak(challengeLabels[language].correct);
+        const correctMessage = getSpeechMessage('challenge-correct-first', speechLang);
+        speak(correctMessage, speechLang, 'challenge-correct');
         setIsComplete(true);
       }
     } else {
-      speak(challengeLabels[language].incorrect);
+      const incorrectMessage = getSpeechMessage('challenge-incorrect-first', speechLang);
+      speak(incorrectMessage, speechLang, 'challenge-incorrect');
       setWrongAttempts(wrongAttempts + 1);
 
       // Show wrong feedback after 2 failed attempts
@@ -153,10 +176,21 @@ export const MatchPairsChallenge = ({
   };
 
   const handleCollectStar = () => {
+    // If this is a revisit and they succeeded, clear it from failed challenges
+    if (isRevisit) {
+      clearFailedChallenge(storyId, challengeNumber - 1);
+      console.log(`✅ Challenge ${challengeNumber} cleared from failed list - earned star on revisit!`);
+    }
     onComplete(attemptCount <= challenge.pairs.length * 1.5);
   };
 
   const handleSkip = () => {
+    // If user is on wrong-second (ran out of retries) and it's not a revisit,
+    // mark this challenge as failed for later revisit
+    if (showWrongFeedback && wrongAttempts >= 2 && !isRevisit) {
+      markChallengeAsFailed(storyId, challengeNumber - 1);
+      console.log(`❌ Challenge ${challengeNumber} marked as failed - will revisit after challenge 5`);
+    }
     onComplete(false);
   };
 
@@ -177,6 +211,7 @@ export const MatchPairsChallenge = ({
           onBack={() => window.history.back()}
           onCheckAnswer={() => {}} // No-op, matching happens automatically
           checkAnswerDisabled={true} // Always disabled since auto-checking
+          onSkip={isRevisit ? handleSkip : undefined}
         />
       );
     }
@@ -296,6 +331,11 @@ export const MatchPairsChallenge = ({
     <ChallengeLayout bottomBar={renderBottomBar()}>
       {/* Main Content */}
       <Box sx={{ px: 4, pt: 4, pb: 4, maxWidth: 800, mx: 'auto', flex: 1 }}>
+        {isRevisit && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <RetryMistakeBadge />
+          </Box>
+        )}
         <Typography
           variant="h4"
           sx={{

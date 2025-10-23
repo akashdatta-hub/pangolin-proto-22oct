@@ -3,6 +3,44 @@
 
 export type ChallengeType = 'drawing' | 'fill-blanks' | 'match-pairs' | 'sentence-building' | 'mcq';
 
+// Hint Types
+export type HintImageUnscramble = {
+  type: 'image-unscramble';
+  question: { en: string; te: string; hi: string };
+  imagePath: string;
+  jumbledLetters: string;
+  answer: string;
+};
+
+export type HintImageQuestion = {
+  type: 'image-question';
+  question: { en: string; te: string; hi: string };
+  imagePath: string;
+  imageAspectRatio?: string; // e.g., '4/3'
+};
+
+export type HintRiddle = {
+  type: 'riddle';
+  question: { en: string; te: string; hi: string };
+  answer: string | string[]; // Can be single word or multiple words
+  options?: string[]; // Optional word options to click
+};
+
+export type HintWordBubbles = {
+  type: 'word-bubbles';
+  question: { en: string; te: string; hi: string };
+  words: string[]; // English words to display
+};
+
+export type HintTranslation = {
+  type: 'translation';
+  question: { en: string; te: string; hi: string };
+  sentence: { te: string; hi: string };
+  targetLanguage: 'en';
+};
+
+export type Hint = HintImageUnscramble | HintImageQuestion | HintRiddle | HintWordBubbles | HintTranslation;
+
 export interface DrawingChallenge {
   type: 'drawing';
   question: {
@@ -12,15 +50,7 @@ export interface DrawingChallenge {
   };
   correctAnswers: string[]; // Preset correct answers
   goalWords: string[]; // Words the student should learn from this challenge
-  hint: {
-    question: {
-      en: string;
-      te: string;
-      hi: string;
-    };
-    jumbledLetters: string;
-    answer: string;
-  };
+  hint: Hint;
 }
 
 export interface FillBlanksChallenge {
@@ -34,15 +64,7 @@ export interface FillBlanksChallenge {
   correctAnswer: string | string[]; // Single answer or array for multiple blanks
   suggestedWords: string[]; // Word options including correct answers
   goalWords: string[]; // Words the student should learn from this challenge
-  hint: {
-    question: {
-      en: string;
-      te: string;
-      hi: string;
-    };
-    jumbledLetters: string;
-    answer: string;
-  };
+  hint: Hint;
 }
 
 export interface MatchPairsChallenge {
@@ -57,15 +79,7 @@ export interface MatchPairsChallenge {
     translation: string;
   }>;
   goalWords: string[]; // Words the student should learn from this challenge
-  hint: {
-    question: {
-      en: string;
-      te: string;
-      hi: string;
-    };
-    jumbledLetters: string;
-    answer: string;
-  };
+  hint: Hint;
 }
 
 export interface SentenceBuildingChallenge {
@@ -78,15 +92,7 @@ export interface SentenceBuildingChallenge {
   words: string[]; // Words to arrange
   correctSentence: string;
   goalWords: string[]; // Words the student should learn from this challenge
-  hint: {
-    question: {
-      en: string;
-      te: string;
-      hi: string;
-    };
-    jumbledLetters: string;
-    answer: string;
-  };
+  hint: Hint;
 }
 
 export interface MCQChallenge {
@@ -99,15 +105,7 @@ export interface MCQChallenge {
   options: string[]; // 3 options
   correctAnswer: string;
   goalWords: string[]; // Words the student should learn from this challenge
-  hint: {
-    question: {
-      en: string;
-      te: string;
-      hi: string;
-    };
-    jumbledLetters: string;
-    answer: string;
-  };
+  hint: Hint;
 }
 
 export type Challenge =
@@ -163,11 +161,13 @@ export const storyChallenges: Record<string, StoryChallenge> = {
         correctAnswers: ['kite', 'bird', 'plane'],
         goalWords: ['kite', 'bird', 'plane'], // Goal: learn 3 words for things that fly
         hint: {
+          type: 'image-unscramble',
           question: {
-            en: 'Unscramble: What were the friends flying in the story?',
-            te: 'అక్షరాలను క్రమంలో పెట్టండి: కథలో స్నేహితులు ఏమి ఎగురవేసారు?',
-            hi: 'अक्षरों को सही क्रम में लगाएं: कहानी में दोस्त क्या उड़ा रहे थे?',
+            en: 'Look at this picture and unscramble the letters to spell what you see!',
+            te: 'ఈ చిత్రాన్ని చూడండి మరియు అక్షరాలను సరైన క్రమంలో పెట్టి ఇది ఏమిటో చెప్పండి!',
+            hi: 'इस तस्वीर को देखो और अक्षरों को सही क्रम में लगाकर बताओ यह क्या है!',
           },
+          imagePath: '/assets/story1-challenge2/story1-challenge2-kiteimage.png',
           jumbledLetters: 'TIEK',
           answer: 'kite',
         },
@@ -185,13 +185,14 @@ export const storyChallenges: Record<string, StoryChallenge> = {
         suggestedWords: ['air', 'wind', 'ground', 'tree', 'house'],
         goalWords: ['air', 'wind'], // Goal: learn words related to where kites fly
         hint: {
+          type: 'riddle',
           question: {
-            en: 'Unscramble: What did the kite lift into?',
-            te: 'అక్షరాలను క్రమంలో పెట్టండి: పతంగం దేనిలోకి ఎగిరింది?',
-            hi: 'अक्षरों को सही क्रम में लगाएं: पतंग किसमें उड़ी?',
+            en: 'Two invisible friends help the kite fly. They help birds fly and clouds float too. Can you guess their names?',
+            te: 'రెండు కనిపించని స్నేహితులు పతంగాన్ని ఎగరడానికి సహాయం చేస్తాయి. అవి పక్షులు ఎగరడానికి మరియు మేఘాలు తేలడానికి కూడా సహాయం చేస్తాయి. వాటి పేర్లు ఏమిటో ఊహించగలవా?',
+            hi: 'दो अनदेखे दोस्त पतंग को उड़ने में मदद करते हैं। वे पक्षियों को उड़ने और बादलों को तैरने में भी मदद करते हैं। क्या तुम उनके नाम बता सकते हो?',
           },
-          jumbledLetters: 'RIA',
-          answer: 'air',
+          answer: ['air', 'wind'],
+          options: ['air', 'wind', 'tree'],
         },
       },
       // Challenge 3: Match the Pairs
@@ -210,13 +211,13 @@ export const storyChallenges: Record<string, StoryChallenge> = {
         ],
         goalWords: ['sky', 'tree'], // Goal: learn new words (kite & wind already learned in previous challenges)
         hint: {
+          type: 'word-bubbles',
           question: {
-            en: 'Unscramble: The English word for పతంగం',
-            te: 'అక్షరాలను క్రమంలో పెట్టండి: పతంగం కోసం ఇంగ్లీష్ పదం',
-            hi: 'अक्षरों को सही क्रम में लगाएं: पतंग के लिए अंग्रेजी शब्द',
+            en: 'Click on the words to hear them in English and Hindi!',
+            te: 'పదాలపై క్లిక్ చేయండి వాటిని ఇంగ్లీష్ మరియు హిందీలో వినడానికి!',
+            hi: 'शब्दों पर क्लिक करो उन्हें अंग्रेजी और हिंदी में सुनने के लिए!',
           },
-          jumbledLetters: 'TEKI',
-          answer: 'kite',
+          words: ['kite', 'sky', 'wind', 'tree'],
         },
       },
       // Challenge 4: Sentence Building
@@ -231,13 +232,17 @@ export const storyChallenges: Record<string, StoryChallenge> = {
         correctSentence: 'Pangolin held the spool tight and cheered them on',
         goalWords: ['held', 'spool', 'tight'], // Goal: learn action words and kite-flying related vocabulary
         hint: {
+          type: 'translation',
           question: {
-            en: 'Unscramble: What is the first word?',
-            te: 'అక్షరాలను క్రమంలో పెట్టండి: మొదటి పదం ఏమిటి?',
-            hi: 'अक्षरों को सही क्रम में लगाएं: पहला शब्द क्या है?',
+            en: 'Can you translate this sentence into English?',
+            te: 'మీరు ఈ వాక్యాన్ని ఇంగ్లీష్‌లోకి అనువదించగలరా?',
+            hi: 'क्या तुम इस वाक्य को अंग्रेजी में बता सकते हो?',
           },
-          jumbledLetters: 'LNPAOGIN',
-          answer: 'Pangolin',
+          sentence: {
+            te: 'పాంగొలిన్ స్పూల్‌ను గట్టిగా పట్టుకొని వారిని ఉత్సాహపరిచాడు',
+            hi: 'पैंगोलिन ने धागे की रील को कसकर पकड़ा और उनकी हौसला बढ़ाई',
+          },
+          targetLanguage: 'en',
         },
       },
       // Challenge 5: MCQ
@@ -252,13 +257,14 @@ export const storyChallenges: Record<string, StoryChallenge> = {
         correctAnswer: 'blue',
         goalWords: ['blue'], // Goal: learn color word
         hint: {
+          type: 'image-question',
           question: {
-            en: 'Unscramble: A word that describes the sky',
-            te: 'అక్షరాలను క్రమంలో పెట్టండి: ఆకాశాన్ని వివరించే పదం',
-            hi: 'अक्षरों को सही क्रम में लगाएं: आकाश का वर्णन करने वाला शब्द',
+            en: 'What colour is the sky in the picture?',
+            te: 'చిత్రంలో ఆకాశం ఏ రంగులో ఉంది?',
+            hi: 'तस्वीर में आकाश किस रंग का है?',
           },
-          jumbledLetters: 'EULB',
-          answer: 'blue',
+          imagePath: '/assets/story1-page2.jpg',
+          imageAspectRatio: '4/3',
         },
       },
     ],
@@ -275,10 +281,10 @@ export const challengeLabels = {
     hint: 'Hint',
     close: 'Close',
 
-    // Feedback
-    correct: 'Correct! Well done!',
-    incorrect: 'Not quite right. Try again!',
-    incorrectSecond: 'Let\'s try a hint to help you.',
+    // UI Display Labels (not for speech)
+    correct: 'Correct!',
+    incorrect: 'Incorrect',
+    matched: 'Matched!',
 
     // Drawing Challenge
     drawingInstruction: 'Use the tools below to draw your answer',
@@ -292,7 +298,6 @@ export const challengeLabels = {
 
     // Match Pairs
     matchPairsInstruction: 'Click pairs to match English words with translations',
-    matched: 'Matched!',
 
     // Sentence Building
     sentenceBuildingInstruction: 'Drag the words to build the correct sentence',
@@ -309,10 +314,10 @@ export const challengeLabels = {
     hint: 'సూచన',
     close: 'మూసివేయండి',
 
-    // Feedback
-    correct: 'సరైనది! బాగా చేసారు!',
-    incorrect: 'సరైనది కాదు. మళ్లీ ప్రయత్నించండి!',
-    incorrectSecond: 'మీకు సహాయం చేయడానికి ఒక సూచన ప్రయత్నిద్దాం.',
+    // UI Display Labels (not for speech)
+    correct: 'సరైనది!',
+    incorrect: 'తప్పు',
+    matched: 'సరిపోలింది!',
 
     // Drawing Challenge
     drawingInstruction: 'మీ సమాధానాన్ని గీయడానికి దిగువ సాధనాలను ఉపయోగించండి',
@@ -326,7 +331,6 @@ export const challengeLabels = {
 
     // Match Pairs
     matchPairsInstruction: 'ఆంగ్ల పదాలను అనువాదాలతో సరిపోల్చడానికి జతలను క్లిక్ చేయండి',
-    matched: 'సరిపోలింది!',
 
     // Sentence Building
     sentenceBuildingInstruction: 'సరైన వాక్యాన్ని రూపొందించడానికి పదాలను లాగండి',
@@ -337,36 +341,35 @@ export const challengeLabels = {
   },
   hi: {
     // Common
-    submit: 'जमा करें',
-    tryAgain: 'पुनः प्रयास करें',
-    continue: 'जारी रखें',
-    hint: 'संकेत',
-    close: 'बंद करें',
+    submit: 'सबमिट करें',
+    tryAgain: 'फिर से कोशिश करो',
+    continue: 'आगे बढ़ो',
+    hint: 'हिंट',
+    close: 'बंद करो',
 
-    // Feedback
-    correct: 'सही! बहुत बढ़िया!',
-    incorrect: 'बिल्कुल सही नहीं। फिर से कोशिश करें!',
-    incorrectSecond: 'आपकी मदद के लिए एक संकेत आजमाते हैं।',
+    // UI Display Labels (not for speech)
+    correct: 'सही!',
+    incorrect: 'गलत',
+    matched: 'मिल गया!',
 
     // Drawing Challenge
-    drawingInstruction: 'अपना उत्तर बनाने के लिए नीचे दिए गए उपकरणों का उपयोग करें',
-    drawingPlaceholder: 'यहाँ बनाएं',
+    drawingInstruction: 'अपना जवाब बनाने के लिए नीचे दिए गए टूल्स का इस्तेमाल करो',
+    drawingPlaceholder: 'यहाँ बनाओ',
     colorPalette: 'रंग',
-    delete: 'मिटाएं',
+    delete: 'मिटाओ',
 
     // Fill in Blanks
-    fillBlanksInstruction: 'लापता शब्द टाइप करें या सुझावों में से चुनें',
-    typeHere: 'यहाँ टाइप करें...',
+    fillBlanksInstruction: 'खाली शब्द टाइप करो या सुझावों में से चुनो',
+    typeHere: 'यहाँ टाइप करो...',
 
     // Match Pairs
-    matchPairsInstruction: 'अंग्रेजी शब्दों को अनुवाद से मिलाने के लिए जोड़े पर क्लिक करें',
-    matched: 'मिलान किया!',
+    matchPairsInstruction: 'अंग्रेजी शब्दों को हिंदी से मिलाने के लिए जोड़े पर क्लिक करो',
 
     // Sentence Building
-    sentenceBuildingInstruction: 'सही वाक्य बनाने के लिए शब्दों को खींचें',
-    yourAnswer: 'आपका उत्तर:',
+    sentenceBuildingInstruction: 'सही वाक्य बनाने के लिए शब्दों को खींचो',
+    yourAnswer: 'आपका जवाब:',
 
     // MCQ
-    mcqInstruction: 'सही उत्तर चुनें',
+    mcqInstruction: 'सही जवाब चुनो',
   },
 };
