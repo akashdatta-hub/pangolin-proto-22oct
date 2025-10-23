@@ -2,6 +2,7 @@ import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Box, Typography, Button, Container } from '@mui/material';
 import { colors } from '../theme/theme';
+import { setTag, trackEvent, upgradeSession } from '../utils/clarity';
 
 interface Props {
   children: ReactNode;
@@ -24,6 +25,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+
+    // Track error in Clarity
+    setTag('error_name', error.name);
+    setTag('error_msg', error.message.slice(0, 120));
+    setTag('error_stack', (error.stack || '').slice(0, 200));
+    trackEvent('js_error');
+    upgradeSession('js_error'); // Prioritize error sessions for review
   }
 
   public render() {

@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { speak, getSpeechLanguage } from '../utils/speech';
 import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
 import { stories } from '../data/stories';
@@ -27,6 +28,7 @@ export const StoryCompletePage = () => {
   const { storyId } = useParams<{ storyId: string }>();
   const navigate = useNavigate();
   const { t, language } = useLanguage();
+  const analytics = useAnalytics();
   const {
     getStoryResults,
     hasCompletedFirstStory,
@@ -105,10 +107,17 @@ export const StoryCompletePage = () => {
     if (earnedWordExplorer) {
       console.log('✅ Marking Word Explorer badge as earned');
       markFirstStoryComplete();
+      analytics.trackBadgeEarned('word_explorer');
     }
     if (earnedStrongStart) {
       console.log('✅ Marking Strong Start badge as earned');
       markStrongStartEarned();
+      analytics.trackBadgeEarned('strong_start');
+    }
+
+    // Track star collection
+    if (starsEarned > 0) {
+      analytics.trackStarAwarded(starsEarned);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps array means this only runs once on mount

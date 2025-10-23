@@ -6,21 +6,32 @@ import CssBaseline from '@mui/material/CssBaseline'
 import theme from './theme/theme'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { ChallengeProgressProvider } from './contexts/ChallengeProgressContext'
+import { AnalyticsProvider } from './contexts/AnalyticsContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import App from './App.tsx'
+
+// Inject Clarity ID from environment variable
+declare global {
+  interface Window {
+    __CLARITY_ID__?: string;
+  }
+}
+window.__CLARITY_ID__ = import.meta.env.VITE_CLARITY_ID;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <LanguageProvider>
-            <ChallengeProgressProvider>
-              <App />
-            </ChallengeProgressProvider>
-          </LanguageProvider>
-        </ThemeProvider>
+        <AnalyticsProvider>
+          <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <LanguageProvider>
+              <ChallengeProgressProvider>
+                <App />
+              </ChallengeProgressProvider>
+            </LanguageProvider>
+          </ThemeProvider>
+        </AnalyticsProvider>
       </BrowserRouter>
     </ErrorBoundary>
   </StrictMode>,
