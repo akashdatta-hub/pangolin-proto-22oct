@@ -10,14 +10,6 @@ import { AnalyticsProvider } from './contexts/AnalyticsContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import App from './App.tsx'
 
-// Inject Clarity ID from environment variable
-declare global {
-  interface Window {
-    __CLARITY_ID__?: string;
-  }
-}
-window.__CLARITY_ID__ = import.meta.env.VITE_CLARITY_ID;
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
