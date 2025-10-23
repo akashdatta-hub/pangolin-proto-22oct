@@ -2,77 +2,12 @@ import { Box, Container, Typography, Button, IconButton, Chip } from '@mui/mater
 import { Close, VolumeUp } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
 import { stories } from '../data/stories';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
+import { ProgressBar } from '../components/ProgressBar';
 import { useState } from 'react';
-
-// Progress bar component
-const ProgressBar = ({ currentPage, totalPages }: { currentPage: number; totalPages: number }) => {
-  const items = [];
-
-  for (let i = 1; i <= totalPages; i++) {
-    if (i < currentPage) {
-      // Past page - straight line
-      items.push(
-        <Box
-          key={`line-${i}`}
-          sx={{ width: 40, height: 3, bgcolor: colors.tertiary.main, borderRadius: 2 }}
-        />
-      );
-    } else if (i === currentPage) {
-      // Current page - squiggly line
-      items.push(
-        <Box
-          key={`current-${i}`}
-          sx={{
-            width: 40,
-            height: 8,
-            background: `repeating-linear-gradient(90deg, ${colors.tertiary.main} 0px, ${colors.tertiary.main} 6px, transparent 6px, transparent 10px)`,
-            borderRadius: 2,
-          }}
-        />
-      );
-    } else {
-      // Future page - light line
-      items.push(
-        <Box
-          key={`future-${i}`}
-          sx={{ width: 40, height: 3, bgcolor: colors.neutral[90], borderRadius: 2 }}
-        />
-      );
-    }
-
-    // Add star after each page except the last
-    if (i < totalPages) {
-      items.push(
-        <Box
-          key={`star-${i}`}
-          sx={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            border: `2px solid ${colors.secondary.main}`,
-            bgcolor: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            color: colors.secondary.main,
-          }}
-        >
-          ★
-        </Box>
-      );
-    }
-  }
-
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-      {items}
-    </Box>
-  );
-};
 
 // Text-to-Speech function
 const speak = (text: string, lang: string) => {
@@ -97,11 +32,20 @@ export const StoryPage = () => {
   const { storyId, pageNumber } = useParams<{ storyId: string; pageNumber: string }>();
   const navigate = useNavigate();
   const { t, language } = useLanguage();
+  const { getStoryResults } = useChallengeProgress();
   const [clickedWords, setClickedWords] = useState<Set<string>>(new Set());
 
   const story = stories[storyId || ''];
   const currentPageNum = parseInt(pageNumber || '1');
   const currentPage = story?.pages.find((p) => p.pageNumber === currentPageNum);
+
+  // Get challenge results for progress bar
+  const results = getStoryResults(storyId || '');
+  // Convert results to boolean array: [true, false, true, ...] for each challenge
+  const challengeResults = Array(story?.pages.length || 0).fill(false).map((_, index) => {
+    const result = results.find((r) => r.challengeIndex === index);
+    return result?.correct || false;
+  });
 
   if (!story || !currentPage) {
     return (
@@ -115,11 +59,9 @@ export const StoryPage = () => {
   // Split text into sentences for sentence-level audio
   const sentences = currentPage.text.match(/[^.!?]+[.!?]+/g) || [currentPage.text];
 
-  // Split text into words and punctuation
-  const wordsAndPunctuation = currentPage.text.split(/(\s+|[.,!?;:"'()—-])/);
-
   const handleWordClick = (word: string) => {
-    const cleanWord = word.trim().toLowerCase().replace(/[.,!?;:"'()—-]/g, '');
+    // Extract only the core word, removing leading/trailing punctuation but keeping internal apostrophes/hyphens
+    const cleanWord = word.trim().replace(/^["']+|["'.,!?;:—-]+$/g, '').toLowerCase();
     if (cleanWord) {
       speak(cleanWord, language);
       setClickedWords(new Set([...clickedWords, cleanWord]));
@@ -131,43 +73,70 @@ export const StoryPage = () => {
   };
 
   const handleNext = () => {
-    if (currentPageNum < story.pages.length) {
-      navigate(`/story/${storyId}/page/${currentPageNum + 1}`);
-    } else {
-      // Go to first challenge
-      navigate(`/story/${storyId}/challenge/1`);
-    }
+    // After each page, go to the corresponding challenge
+    navigate(`/story/${storyId}/challenge/${currentPageNum}`);
   };
 
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: colors.background.default,
+        bgcolor: '#FFF4EB',
+        pb: '100px', // Add padding to prevent content from being hidden behind fixed bottom bar
+        pt: 3,
       }}
     >
       <Container maxWidth="lg">
-        {/* Header */}
+        {/* Main Content - White Container */}
         <Box
           sx={{
-            pt: 2,
-            pb: 3,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            bgcolor: 'white',
+            borderRadius: 3,
+            mb: 3,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton onClick={() => navigate('/')} size="large">
-              <Close />
-            </IconButton>
-            <ProgressBar currentPage={currentPageNum} totalPages={story.pages.length} />
+          {/* Header inside white container */}
+          <Box
+            sx={{
+              px: 4,
+              pt: 3,
+              pb: 2,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <IconButton onClick={() => navigate('/')} size="large">
+                <Close />
+              </IconButton>
+              <ProgressBar
+                currentPosition={currentPageNum * 2 - 1}
+                totalPositions={story.pages.length * 2}
+                challengeResults={challengeResults}
+              />
+            </Box>
+            <LanguageSelector />
           </Box>
-          <LanguageSelector />
-        </Box>
 
-        {/* Main Content */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, mt: 4 }}>
+          {/* Horizontal Rule */}
+          <Box
+            sx={{
+              height: '1px',
+              bgcolor: '#CAC4D0',
+              mx: 4,
+            }}
+          />
+
+          {/* Content Grid */}
+          <Box
+            sx={{
+              p: 4,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 4,
+            }}
+          >
           {/* Left - Text Content */}
           <Box>
             <Typography
@@ -187,112 +156,187 @@ export const StoryPage = () => {
             {/* Interactive Text */}
             <Box sx={{ mt: 3 }}>
               {sentences.map((sentence, sentenceIndex) => (
-                <Box key={sentenceIndex} sx={{ mb: 3, display: 'flex', gap: 1 }}>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleSentenceClick(sentence)}
-                    sx={{
-                      bgcolor: colors.primary.main,
-                      color: 'white',
-                      width: 32,
-                      height: 32,
-                      '&:hover': { bgcolor: colors.primary.dark },
-                    }}
-                  >
-                    <VolumeUp sx={{ fontSize: 18 }} />
-                  </IconButton>
-                  <Box sx={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {sentence.split(/(\s+|[.,!?;:"'()—-])/).map((part, wordIndex) => {
-                      const cleanWord = part.trim().toLowerCase().replace(/[.,!?;:"'()—-]/g, '');
-                      const isWord = cleanWord.length > 0 && /\w/.test(cleanWord);
-                      const isClicked = clickedWords.has(cleanWord);
+                <Box key={sentenceIndex} sx={{ mb: 4 }}>
+                  <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', mb: 1 }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSentenceClick(sentence)}
+                      sx={{
+                        bgcolor: colors.primary.main,
+                        color: 'white',
+                        width: 40,
+                        height: 40,
+                        flexShrink: 0,
+                        '&:hover': { bgcolor: colors.primary.dark },
+                      }}
+                    >
+                      <VolumeUp sx={{ fontSize: 20 }} />
+                    </IconButton>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        alignItems: 'center',
+                        rowGap: 1.5,
+                      }}
+                    >
+                      {sentence.split(/[\s—]+/).map((word, wordIndex) => {
+                        // Skip empty strings
+                        if (!word.trim()) {
+                          return null;
+                        }
 
-                      if (!isWord || !part.trim()) {
-                        return <span key={wordIndex}>{part}</span>;
-                      }
+                        // Extract the core word and any leading/trailing punctuation
+                        // Keep apostrophes and hyphens as part of the word (contractions, possessives, hyphenated words)
+                        const match = word.match(/^(["']*)([A-Za-z0-9'-]+)(["'.,!?;:-]*)$/);
 
-                      return (
-                        <Chip
-                          key={wordIndex}
-                          label={part.trim()}
-                          onClick={() => handleWordClick(part)}
-                          sx={{
-                            bgcolor: isClicked ? colors.tertiary.main : colors.tertiary.light,
-                            color: colors.primary.dark,
-                            cursor: 'pointer',
-                            fontSize: '1rem',
-                            height: 'auto',
-                            py: 0.5,
-                            '&:hover': {
-                              bgcolor: colors.tertiary.main,
-                            },
-                            transition: 'all 0.2s',
-                          }}
-                        />
-                      );
-                    })}
+                        if (!match) {
+                          return null;
+                        }
+
+                        const [, leadingQuotes, coreWord, trailingPunct] = match;
+                        const fullWord = leadingQuotes + coreWord + trailingPunct;
+                        const cleanWord = coreWord.toLowerCase();
+                        const isClicked = clickedWords.has(cleanWord);
+
+                        return (
+                          <Button
+                            key={wordIndex}
+                            onClick={() => handleWordClick(fullWord)}
+                            sx={{
+                              bgcolor: isClicked ? colors.tertiary.main : '#FFDCBF',
+                              color: '#1E0D00',
+                              cursor: 'pointer',
+                              fontSize: '1.125rem',
+                              fontWeight: 500,
+                              px: 3,
+                              py: 1.25,
+                              borderRadius: 8,
+                              textTransform: 'none',
+                              minWidth: 'auto',
+                              transition: 'all 0.2s',
+                              '&:hover': {
+                                bgcolor: isClicked ? colors.tertiary.main : '#FFD0A3',
+                              },
+                              '&:active': {
+                                bgcolor: isClicked ? colors.tertiary.main : '#FFC48A',
+                              },
+                            }}
+                          >
+                            {fullWord}
+                          </Button>
+                        );
+                      })}
+                    </Box>
                   </Box>
                 </Box>
               ))}
             </Box>
 
-            {/* Bottom CTA */}
-            <Box
-              sx={{
-                mt: 6,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography
-                variant="h6"
-                sx={{
-                  fontFamily: typography.displayFont,
-                  color: colors.primary.dark,
-                }}
-              >
-                {t('readyForChallenge')}
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={handleNext}
-                sx={{
-                  bgcolor: colors.primary.main,
-                  color: 'white',
-                  textTransform: 'none',
-                  px: 4,
-                  py: 1.5,
-                  fontSize: '1.1rem',
-                  borderRadius: 3,
-                  '&:hover': { bgcolor: colors.primary.dark },
-                }}
-              >
-                {currentPageNum < story.pages.length ? 'Next Page' : t('playChallenge')}
-              </Button>
-            </Box>
           </Box>
 
           {/* Right - Illustration */}
           <Box
             sx={{
-              bgcolor: colors.tertiary.light,
               borderRadius: 3,
-              minHeight: 400,
+              width: '100%',
+              height: '750px',
+              overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              p: 4,
             }}
           >
-            <Typography variant="h3" sx={{ opacity: 0.3, textAlign: 'center' }}>
-              Illustration
-              <br />
-              Page {currentPageNum}
-            </Typography>
+            {currentPage.illustration ? (
+              <img
+                src={currentPage.illustration}
+                alt={`Story illustration for page ${currentPageNum}`}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  borderRadius: '12px',
+                }}
+              />
+            ) : (
+              <Typography variant="h3" sx={{ opacity: 0.3, textAlign: 'center' }}>
+                Illustration
+                <br />
+                Page {currentPageNum}
+              </Typography>
+            )}
+          </Box>
           </Box>
         </Box>
+
       </Container>
+
+      {/* Bottom CTA - Fixed to bottom */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          bgcolor: '#FFF4EB',
+          borderTop: '1px solid rgba(0, 0, 0, 0.08)',
+          py: 2,
+          zIndex: 1000,
+        }}
+      >
+        <Container maxWidth="lg">
+          <Box
+            sx={{
+              bgcolor: 'white',
+              borderRadius: 3,
+              p: 3,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.05)',
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                fontFamily: typography.displayFont,
+                color: colors.primary.dark,
+              }}
+            >
+              {t('readyForChallenge')}
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={handleNext}
+              startIcon={
+                <Box
+                  component="img"
+                  src="/assets/icon-play-challenge-button.svg"
+                  alt=""
+                  sx={{ width: 20, height: 20 }}
+                />
+              }
+              sx={{
+                bgcolor: '#743799',
+                color: '#FFFFFF',
+                textTransform: 'none',
+                px: 2,
+                py: '10px',
+                fontSize: '14px',
+                fontWeight: 500,
+                lineHeight: '20px',
+                letterSpacing: '0.1px',
+                borderRadius: '100px',
+                '&:hover': { bgcolor: '#5c2c7a' },
+              }}
+            >
+              {t('playChallenge')}
+            </Button>
+          </Box>
+        </Container>
+      </Box>
     </Box>
   );
 };

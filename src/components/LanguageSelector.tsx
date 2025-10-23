@@ -1,7 +1,8 @@
 import { Box, IconButton, Menu, MenuItem } from '@mui/material';
 import LanguageIcon from '@mui/icons-material/Language';
 import { useState } from 'react';
-import { useLanguage, Language } from '../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import type { Language } from '../types';
 
 const languageNames: Record<Language, string> = {
   en: 'English',

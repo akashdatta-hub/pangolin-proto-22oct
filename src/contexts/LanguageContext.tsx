@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState } from 'react';
+import type { ReactNode } from 'react';
 import { uiLabels } from '../data/stories';
+import type { Language } from '../types';
 
-export type Language = 'en' | 'te' | 'hi';
+export type { Language };
 
-interface LanguageContextType {
+export interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: keyof typeof uiLabels.en) => string;
@@ -11,7 +13,7 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>('en');
 
   const t = (key: keyof typeof uiLabels.en): string => {
@@ -23,12 +25,15 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
       {children}
     </LanguageContext.Provider>
   );
-};
+}
 
-export const useLanguage = () => {
+export function useLanguage(): LanguageContextType {
   const context = useContext(LanguageContext);
   if (!context) {
     throw new Error('useLanguage must be used within a LanguageProvider');
   }
   return context;
-};
+}
+
+// Re-export for clarity
+export { LanguageContext };

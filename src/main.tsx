@@ -5,17 +5,23 @@ import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import theme from './theme/theme'
 import { LanguageProvider } from './contexts/LanguageContext'
+import { ChallengeProgressProvider } from './contexts/ChallengeProgressContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <LanguageProvider>
-          <App />
-        </LanguageProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <LanguageProvider>
+            <ChallengeProgressProvider>
+              <App />
+            </ChallengeProgressProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )
