@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { ChallengeLayout } from './ChallengeLayout';
@@ -41,6 +42,7 @@ export const FillBlanksChallenge = ({
   isRevisit = false,
 }: FillBlanksChallengeProps) => {
   const { language, t } = useLanguage();
+  const analytics = useAnalytics();
   const { checkAndCelebrateStreak, markChallengeAsFailed, clearFailedChallenge } = useChallengeProgress();
 
   // Calculate number of blanks
@@ -52,6 +54,24 @@ export const FillBlanksChallenge = ({
   const [attemptState, setAttemptState] = useState<AttemptState>('initial');
   const [attemptCount, setAttemptCount] = useState(0);
   const [hintModalOpen, setHintModalOpen] = useState(false);
+
+  const startTimeRef = useRef<number>(Date.now());
+  const hasTrackedStartRef = useRef(false);
+  const challengeId = `${storyId}_c${challengeNumber}`;
+
+  // Track challenge started on mount
+  useEffect(() => {
+    if (!hasTrackedStartRef.current) {
+      analytics.trackChallengeStarted(challengeId, 'fill_blanks', challengeNumber, isRevisit);
+
+      if (isRevisit) {
+        analytics.trackChallengeRevisited(challengeId);
+      }
+
+      startTimeRef.current = Date.now();
+      hasTrackedStartRef.current = true;
+    }
+  }, [analytics, challengeId, challengeNumber, isRevisit]);
 
   // Speak challenge question + instruction when opening
   useEffect(() => {
@@ -78,11 +98,29 @@ export const FillBlanksChallenge = ({
       answer.trim().toLowerCase() === correctAnswers[index].toLowerCase()
     );
 
+    // Calculate time spent and current attempt
+    const timeSpent = Date.now() - startTimeRef.current;
+    const currentAttempt = attemptCount + 1;
+
+    // Track challenge submission
+    analytics.trackChallengeSubmitted(
+      challengeId,
+      currentAttempt,
+      allCorrect ? 'correct' : 'incorrect',
+      timeSpent
+    );
+
     // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
     const speechLang = getSpeechLanguage(language);
 
     if (allCorrect) {
       setAttemptState('correct');
+
+      // Track challenge completion
+      analytics.trackChallengeCompleted(challengeId, 'correct', attemptCount > 0);
+
+      // Track star collection (1 star if first attempt, 0 if retry)
+      analytics.trackStarCollected(challengeId, attemptCount === 0 ? 1 : 0);
 
       // Determine which correct message to use
       let feedbackMessage: string;
@@ -112,6 +150,12 @@ export const FillBlanksChallenge = ({
         setAttemptState('wrong-second');
         const incorrectSecondMessage = getSpeechMessage('challenge-incorrect-second', speechLang);
         await speak(incorrectSecondMessage, speechLang, 'challenge-incorrect');
+
+        // Track challenge skipped (ran out of retries)
+        analytics.trackChallengeSkipped(challengeId, currentAttempt, 'ran_out_of_retries');
+
+        // Track star missed
+        analytics.trackStarMissed(challengeId, 'failed_challenge');
       }
     }
   };

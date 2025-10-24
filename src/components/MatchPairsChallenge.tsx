@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -8,6 +8,7 @@ import {
 import { CheckCircle, Star, PanTool, PlayArrow } from '@mui/icons-material';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { ChallengeLayout } from './ChallengeLayout';
@@ -45,6 +46,7 @@ export const MatchPairsChallenge = ({
   isRevisit = false,
 }: MatchPairsChallengeProps) => {
   const { language, t } = useLanguage();
+  const analytics = useAnalytics();
   const { checkAndCelebrateStreak, markChallengeAsFailed, clearFailedChallenge } = useChallengeProgress();
   const [cards, setCards] = useState<CardItem[]>([]);
   const [selectedCards, setSelectedCards] = useState<CardItem[]>([]);
@@ -55,6 +57,24 @@ export const MatchPairsChallenge = ({
   const [showWrongFeedback, setShowWrongFeedback] = useState(false);
   const [hintModalOpen, setHintModalOpen] = useState(false);
   const [hasSpokenIntro, setHasSpokenIntro] = useState(false);
+
+  const startTimeRef = useRef<number>(Date.now());
+  const hasTrackedStartRef = useRef(false);
+  const challengeId = `${storyId}_c${challengeNumber}`;
+
+  // Track challenge started on mount
+  useEffect(() => {
+    if (!hasTrackedStartRef.current) {
+      analytics.trackChallengeStarted(challengeId, 'match_pairs', challengeNumber, isRevisit);
+
+      if (isRevisit) {
+        analytics.trackChallengeRevisited(challengeId);
+      }
+
+      startTimeRef.current = Date.now();
+      hasTrackedStartRef.current = true;
+    }
+  }, [analytics, challengeId, challengeNumber, isRevisit]);
 
   // Speak challenge question + instruction when opening
   useEffect(() => {
@@ -153,6 +173,23 @@ export const MatchPairsChallenge = ({
 
       // Check if all matched
       if (newMatched.size === cards.length) {
+        const timeSpent = Date.now() - startTimeRef.current;
+
+        // Track challenge submission (final successful attempt)
+        analytics.trackChallengeSubmitted(
+          challengeId,
+          attemptCount + 1,
+          'correct',
+          timeSpent
+        );
+
+        // Track challenge completion
+        analytics.trackChallengeCompleted(challengeId, 'correct', wrongAttempts > 0);
+
+        // Track star collection (1 star if reasonable attempts, 0 if too many retries)
+        const earnedStar = attemptCount <= challenge.pairs.length * 1.5;
+        analytics.trackStarCollected(challengeId, earnedStar ? 1 : 0);
+
         const correctMessage = getSpeechMessage('challenge-correct-first', speechLang);
         speak(correctMessage, speechLang, 'challenge-correct');
         setIsComplete(true);
@@ -185,6 +222,14 @@ export const MatchPairsChallenge = ({
   };
 
   const handleSkip = () => {
+    const timeSpent = Date.now() - startTimeRef.current;
+
+    // Track challenge skipped
+    analytics.trackChallengeSkipped(challengeId, attemptCount, 'ran_out_of_retries');
+
+    // Track star missed
+    analytics.trackStarMissed(challengeId, 'failed_challenge');
+
     // If user is on wrong-second (ran out of retries) and it's not a revisit,
     // mark this challenge as failed for later revisit
     if (showWrongFeedback && wrongAttempts >= 2 && !isRevisit) {
