@@ -12,13 +12,41 @@ interface AnalyticsContextType {
   trackEvent: (eventName: string, data?: Record<string, string | number | boolean>) => void;
   setTag: (key: string, value: string | number | boolean) => void;
 
-  // Specific event trackers
+  // Story tracking
+  trackStoryStarted: (storyId: string) => void;
+  trackStoryCompleted: (storyId: string, starsEarned: number) => void;
+  trackAppCompleted: (totalStars: number, vocabScore: number) => void;
+
+  // Language tracking
+  trackLanguageSet: (initialLang: Language) => void;
   trackLanguageSwitch: (newLang: Language, switchCount: number) => void;
+
+  // Challenge lifecycle
   trackChallengeView: (storyId: string, challengeId: string) => void;
+  trackChallengeStarted: (challengeId: string, challengeType: string, challengeNumber: number, isRevisit: boolean) => void;
+  trackChallengeSubmitted: (challengeId: string, attemptNumber: number, result: 'correct' | 'incorrect', timeSpentMs: number) => void;
   trackChallengeCompleted: (challengeId: string, result: 'correct' | 'incorrect', retryAttempt?: boolean) => void;
-  trackStarAwarded: (starsTotal: number) => void;
-  trackBadgeEarned: (badgeType: 'word_explorer' | 'strong_start') => void;
+  trackChallengeSkipped: (challengeId: string, attemptsUsed: number, reason: string) => void;
+  trackChallengeRevisited: (challengeId: string) => void;
+
+  // Hints
   trackHintOpened: (challengeId: string) => void;
+  trackHintCompleted: (challengeId: string) => void;
+
+  // Stars
+  trackStarAwarded: (starsTotal: number) => void;
+  trackStarCollected: (challengeId: string, starNumber: number) => void;
+  trackStarMissed: (challengeId: string, reason: string) => void;
+
+  // Vocabulary test
+  trackVocabTestStarted: (storyId: string) => void;
+  trackVocabQuestionAnswered: (questionNumber: number, result: 'correct' | 'incorrect') => void;
+  trackVocabTestCompleted: (score: number, totalQuestions: number) => void;
+
+  // Badges
+  trackBadgeEarned: (badgeType: 'word_explorer' | 'strong_start') => void;
+
+  // Other
   trackTTSUsed: (context: string, language: Language) => void;
   trackError: (errorName: string, errorMessage: string) => void;
 }
@@ -57,11 +85,13 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     initializeClarity(CLARITY_PROJECT_ID);
 
     // Set global tags
+    const buildTimestamp = new Date().toISOString();
     setTag('app_env', APP_ENV);
     setTag('build_sha', BUILD_SHA.slice(0, 7));
+    setTag('build_timestamp', buildTimestamp);
     setTag('story_id', 'kite-festival'); // Default story
 
-    console.log('🎯 Analytics initialized:', { APP_ENV, BUILD_SHA: BUILD_SHA.slice(0, 7) });
+    console.log('🎯 Analytics initialized:', { APP_ENV, BUILD_SHA: BUILD_SHA.slice(0, 7), buildTimestamp });
   }, []);
 
   // Track page views based on route changes
@@ -154,17 +184,73 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
       trackEvent,
       setTag,
 
-      trackLanguageSwitch: (newLang: Language, switchCount: number) => {
-        trackEvent('language_switch', {
-          lang: newLang,
-          lang_switch_count: switchCount,
+      // Story tracking
+      trackStoryStarted: (storyId: string) => {
+        trackEvent('story_started', { story_id: storyId });
+      },
+
+      trackStoryCompleted: (storyId: string, starsEarned: number) => {
+        trackEvent('story_completed', {
+          story_id: storyId,
+          stars_earned: starsEarned,
         });
       },
 
+      trackAppCompleted: (totalStars: number, vocabScore: number) => {
+        setTag('stars_collected', totalStars);
+        setTag('vocab_score', vocabScore);
+        trackEvent('app_completed', {
+          total_stars: totalStars,
+          vocab_score: vocabScore,
+        });
+      },
+
+      // Language tracking
+      trackLanguageSet: (initialLang: Language) => {
+        setTag('lang', initialLang);
+        trackEvent('language_set', { lang: initialLang });
+      },
+
+      trackLanguageSwitch: (newLang: Language, switchCount: number) => {
+        setTag('lang', newLang);
+        setTag('lang_switch_count', switchCount);
+        trackEvent('language_switched', {
+          lang: newLang,
+          switch_count: switchCount,
+        });
+      },
+
+      // Challenge lifecycle
       trackChallengeView: (storyId: string, challengeId: string) => {
         trackEvent('challenge_view', {
           story_id: storyId,
           challenge_id: challengeId,
+        });
+      },
+
+      trackChallengeStarted: (challengeId: string, challengeType: string, challengeNumber: number, isRevisit: boolean) => {
+        setTag('current_challenge', challengeId);
+        setTag('challenge_type', challengeType);
+        setTag('challenge_number', challengeNumber);
+        setTag('is_revisit', isRevisit);
+
+        trackEvent('challenge_started', {
+          challenge_id: challengeId,
+          challenge_type: challengeType,
+          challenge_number: challengeNumber,
+          is_revisit: isRevisit,
+        });
+      },
+
+      trackChallengeSubmitted: (challengeId: string, attemptNumber: number, result: 'correct' | 'incorrect', timeSpentMs: number) => {
+        setTag('attempts_used', attemptNumber);
+        setTag('time_spent_ms', timeSpentMs);
+
+        trackEvent('challenge_submitted', {
+          challenge_id: challengeId,
+          attempt_number: attemptNumber,
+          result,
+          time_spent_ms: timeSpentMs,
         });
       },
 
@@ -176,24 +262,84 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
         });
       },
 
+      trackChallengeSkipped: (challengeId: string, attemptsUsed: number, reason: string) => {
+        trackEvent('challenge_skipped', {
+          challenge_id: challengeId,
+          attempts_used: attemptsUsed,
+          reason,
+        });
+      },
+
+      trackChallengeRevisited: (challengeId: string) => {
+        trackEvent('challenge_revisited', {
+          challenge_id: challengeId,
+        });
+      },
+
+      // Hints
+      trackHintOpened: (challengeId: string) => {
+        trackEvent('challenge_hint_opened', {
+          challenge_id: challengeId,
+        });
+      },
+
+      trackHintCompleted: (challengeId: string) => {
+        trackEvent('challenge_hint_completed', {
+          challenge_id: challengeId,
+        });
+      },
+
+      // Stars
       trackStarAwarded: (starsTotal: number) => {
         trackEvent('star_awarded', {
           stars_total: starsTotal,
         });
       },
 
+      trackStarCollected: (challengeId: string, starNumber: number) => {
+        trackEvent('star_collected', {
+          challenge_id: challengeId,
+          star_number: starNumber,
+        });
+      },
+
+      trackStarMissed: (challengeId: string, reason: string) => {
+        trackEvent('star_missed', {
+          challenge_id: challengeId,
+          reason,
+        });
+      },
+
+      // Vocabulary test
+      trackVocabTestStarted: (storyId: string) => {
+        trackEvent('vocab_test_started', {
+          story_id: storyId,
+        });
+      },
+
+      trackVocabQuestionAnswered: (questionNumber: number, result: 'correct' | 'incorrect') => {
+        trackEvent('vocab_question_answered', {
+          question_number: questionNumber,
+          result,
+        });
+      },
+
+      trackVocabTestCompleted: (score: number, totalQuestions: number) => {
+        setTag('vocab_score', score);
+        trackEvent('vocab_test_completed', {
+          score,
+          total_questions: totalQuestions,
+        });
+      },
+
+      // Badges
       trackBadgeEarned: (badgeType: 'word_explorer' | 'strong_start') => {
         trackEvent('badge_earned', {
           badge_type: badgeType,
         });
       },
 
-      trackHintOpened: (challengeId: string) => {
-        trackEvent('hint_opened', {
-          challenge_id: challengeId,
-        });
-      },
-
+      // Other
       trackTTSUsed: (context: string, language: Language) => {
         trackEvent('tts_used', {
           tts_context: context,

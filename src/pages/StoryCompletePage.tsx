@@ -103,6 +103,9 @@ export const StoryCompletePage = () => {
 
     playCompletionAudio();
 
+    // Track story completion
+    analytics.trackStoryCompleted(storyId || 'unknown', starsEarned);
+
     // Mark badges as earned AFTER we've captured the initial state
     if (earnedWordExplorer) {
       console.log('✅ Marking Word Explorer badge as earned');
@@ -118,6 +121,11 @@ export const StoryCompletePage = () => {
     // Track star collection
     if (starsEarned > 0) {
       analytics.trackStarAwarded(starsEarned);
+    }
+
+    // Track missed stars
+    if (starsEarned < 5) {
+      analytics.trackStarMissed('story_complete', `only_${starsEarned}_stars`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps array means this only runs once on mount

@@ -13,6 +13,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { stories } from '../data/stories';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
@@ -21,6 +22,7 @@ export const HomeScreen = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const { resetAllProgress } = useChallengeProgress();
+  const analytics = useAnalytics();
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 100 });
   const [isHovering, setIsHovering] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -141,7 +143,10 @@ export const HomeScreen = () => {
                 height: '450px',
                 position: 'relative',
               }}
-              onClick={() => navigate('/story/kite-festival/page/1')}
+              onClick={() => {
+                analytics.trackStoryStarted('kite-festival');
+                navigate('/story/kite-festival/page/1');
+              }}
               onMouseMove={handleMouseMove}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}

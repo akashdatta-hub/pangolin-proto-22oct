@@ -17,6 +17,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>('te');
   const langSwitchCount = useRef(0);
+  const hasTrackedInitial = useRef(false);
 
   // Get analytics safely (may not be available yet on first render)
   let analytics;
@@ -27,12 +28,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     analytics = null;
   }
 
-  // Track initial language on mount
+  // Track initial language on mount (once)
   useEffect(() => {
-    if (analytics) {
-      analytics.setTag('lang', language);
+    if (analytics && !hasTrackedInitial.current) {
+      analytics.trackLanguageSet(language);
+      hasTrackedInitial.current = true;
     }
-  }, [analytics, language]);
+  }, [analytics]);
 
   const setLanguage = (newLang: Language) => {
     if (newLang !== language) {
