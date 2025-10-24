@@ -520,6 +520,7 @@ export const SentenceBuildingChallenge = ({
           open={hintModalOpen}
           onClose={() => setHintModalOpen(false)}
           hint={challenge.hint}
+          challengeId={`${storyId}_c${challengeNumber}`}
           onSuccess={handleHintSuccess}
         />
       </ChallengeLayout>

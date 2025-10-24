@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Box,
   Container,
@@ -9,6 +9,8 @@ import {
 import { Close } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
+import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
 import { speak } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
@@ -17,15 +19,34 @@ import { getSpeechMessage } from '../config/speechMessages';
 export const ThankYouPage = () => {
   const navigate = useNavigate();
   const { language } = useLanguage();
+  const analytics = useAnalytics();
+  const { getStoryResults } = useChallengeProgress();
   const [searchParams] = useSearchParams();
   const correctCount = parseInt(searchParams.get('correct') || '0');
   const totalQuestions = 3;
+  const hasTrackedCompletionRef = useRef(false);
 
-  // Auto-play thank you message
+  // Track app completion and auto-play thank you message
   useEffect(() => {
+    if (!hasTrackedCompletionRef.current) {
+      // Get vocab score from localStorage (stored by VocabularyTestPage)
+      const vocabScore = parseInt(localStorage.getItem('vocab_score') || '0');
+
+      // Calculate total stars from story results
+      const storyId = 'kite-festival';
+      const results = getStoryResults(storyId);
+      const totalStars = results.filter(r => r.correct).length;
+
+      // Track app completion
+      analytics.trackAppCompleted(totalStars, vocabScore);
+
+      hasTrackedCompletionRef.current = true;
+    }
+
+    // Play thank you message
     const message = getSpeechMessage('thankyou-intro', language);
     speak(message, language, 'completion');
-  }, [language]);
+  }, [language, analytics, getStoryResults]);
 
   const percentage = Math.round((correctCount / totalQuestions) * 100);
   const isExcellent = percentage >= 80;

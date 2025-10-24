@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Container,
@@ -15,6 +15,7 @@ import {
 import { Close, CheckCircle, Cancel, ArrowForward } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { LanguageSelector } from '../components/LanguageSelector';
@@ -25,11 +26,21 @@ import { getSpeechMessage } from '../config/speechMessages';
 export const VocabularyTestPage = () => {
   const navigate = useNavigate();
   const { language, t } = useLanguage();
+  const analytics = useAnalytics();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
+  const hasTrackedStartRef = useRef(false);
+
+  // Track vocab test started on mount
+  useEffect(() => {
+    if (!hasTrackedStartRef.current) {
+      analytics.trackVocabTestStarted('kite-festival');
+      hasTrackedStartRef.current = true;
+    }
+  }, [analytics]);
 
   const currentQuestion = vocabularyTestQuestions[currentQuestionIndex];
   const isLastQuestion = currentQuestionIndex === vocabularyTestQuestions.length - 1;
@@ -39,6 +50,12 @@ export const VocabularyTestPage = () => {
     const correct = selectedAnswer === currentQuestion.correctAnswer;
     setIsCorrect(correct);
     setShowFeedback(true);
+
+    // Track answer
+    analytics.trackVocabQuestionAnswered(
+      currentQuestionIndex + 1,
+      correct ? 'correct' : 'incorrect'
+    );
 
     // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
     const speechLang = getSpeechLanguage(language);
@@ -55,8 +72,17 @@ export const VocabularyTestPage = () => {
 
   const handleNext = () => {
     if (isLastQuestion) {
+      // Calculate final score (include current question if answered correctly)
+      const finalCount = isCorrect ? correctCount + 1 : correctCount;
+
+      // Track vocab test completion
+      analytics.trackVocabTestCompleted(finalCount, vocabularyTestQuestions.length);
+
+      // Store score for ThankYouPage
+      localStorage.setItem('vocab_score', String(finalCount));
+
       // Go to Thank You page
-      navigate(`/thank-you?correct=${correctCount}`);
+      navigate(`/thank-you?correct=${finalCount}`);
     } else {
       // Next question
       setCurrentQuestionIndex(currentQuestionIndex + 1);

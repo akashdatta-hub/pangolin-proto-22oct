@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import { Close, VolumeUp } from '@mui/icons-material';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { speak, getSpeechLanguage } from '../utils/speech';
 import { getWordTranslation } from '../data/wordTranslations';
 import { colors, typography } from '../theme/theme';
@@ -21,14 +22,25 @@ interface HintModalProps {
   onClose: () => void;
   hint: Hint;
   onSuccess: () => void;
+  challengeId: string;
 }
 
-export const HintModal = ({ open, onClose, hint, onSuccess }: HintModalProps) => {
+export const HintModal = ({ open, onClose, hint, onSuccess, challengeId }: HintModalProps) => {
   const { language } = useLanguage();
+  const analytics = useAnalytics();
   const [hintAnswer, setHintAnswer] = useState('');
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [attemptCount, setAttemptCount] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
+  const hasTrackedOpenRef = useRef(false);
+
+  // Track hint opened when modal opens
+  useEffect(() => {
+    if (open && !hasTrackedOpenRef.current) {
+      analytics.trackHintOpened(challengeId);
+      hasTrackedOpenRef.current = true;
+    }
+  }, [open, challengeId, analytics]);
 
   const handleSubmit = () => {
     let cleanAnswer = '';
@@ -105,6 +117,10 @@ export const HintModal = ({ open, onClose, hint, onSuccess }: HintModalProps) =>
   };
 
   const handleClose = () => {
+    // Track hint completed when closing
+    analytics.trackHintCompleted(challengeId);
+    hasTrackedOpenRef.current = false; // Reset for next time
+
     setHintAnswer('');
     setSelectedWords([]);
     setAttemptCount(0);

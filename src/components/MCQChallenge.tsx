@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useChallengeProgress } from '../contexts/ChallengeProgressContext';
+import { useAnalytics } from '../contexts/AnalyticsContext';
 import { speak, getSpeechLanguage } from '../utils/speech';
 import { colors, typography } from '../theme/theme';
 import { ChallengeLayout } from './ChallengeLayout';
@@ -42,11 +43,30 @@ export const MCQChallenge = ({
   isRevisit = false,
 }: MCQChallengeProps) => {
   const { language, t } = useLanguage();
+  const analytics = useAnalytics();
   const { checkAndCelebrateStreak, markChallengeAsFailed, clearFailedChallenge } = useChallengeProgress();
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [attemptState, setAttemptState] = useState<AttemptState>('initial');
   const [attemptCount, setAttemptCount] = useState(0);
   const [hintModalOpen, setHintModalOpen] = useState(false);
+
+  const startTimeRef = useRef<number>(Date.now());
+  const hasTrackedStartRef = useRef(false);
+  const challengeId = `${storyId}_c${challengeNumber}`;
+
+  // Track challenge started on mount
+  useEffect(() => {
+    if (!hasTrackedStartRef.current) {
+      analytics.trackChallengeStarted(challengeId, 'mcq', challengeNumber, isRevisit);
+
+      if (isRevisit) {
+        analytics.trackChallengeRevisited(challengeId);
+      }
+
+      startTimeRef.current = Date.now();
+      hasTrackedStartRef.current = true;
+    }
+  }, [analytics, challengeId, challengeNumber, isRevisit]);
 
   // Speak challenge question + instruction when opening
   useEffect(() => {
@@ -65,11 +85,32 @@ export const MCQChallenge = ({
 
   const handleSubmit = async () => {
     const isCorrect = selectedAnswer === challenge.correctAnswer;
+    const timeSpent = Date.now() - startTimeRef.current;
+    const currentAttempt = attemptCount + 1;
+
+    // Track submission
+    analytics.trackChallengeSubmitted(
+      challengeId,
+      currentAttempt,
+      isCorrect ? 'correct' : 'incorrect',
+      timeSpent
+    );
+
     // Get effective speech language (falls back to Hindi if Telugu voice unavailable)
     const speechLang = getSpeechLanguage(language);
 
     if (isCorrect) {
       setAttemptState('correct');
+
+      // Track challenge completed
+      analytics.trackChallengeCompleted(
+        challengeId,
+        'correct',
+        attemptCount > 0 // is retry
+      );
+
+      // Track star collected (1 star for first attempt, 0 for retries)
+      analytics.trackStarCollected(challengeId, attemptCount === 0 ? 1 : 0);
 
       // Determine which correct message to use
       let feedbackMessage: string;
@@ -101,6 +142,10 @@ export const MCQChallenge = ({
         setAttemptState('wrong-second');
         const incorrectSecondMessage = getSpeechMessage('challenge-incorrect-second', speechLang);
         await speak(incorrectSecondMessage, speechLang, 'challenge-incorrect');
+
+        // Track challenge skipped (ran out of retries)
+        analytics.trackChallengeSkipped(challengeId, currentAttempt, 'ran_out_of_retries');
+        analytics.trackStarMissed(challengeId, 'failed_challenge');
       }
     }
   };
@@ -262,6 +307,7 @@ export const MCQChallenge = ({
         open={hintModalOpen}
         onClose={() => setHintModalOpen(false)}
         hint={challenge.hint}
+        challengeId={challengeId}
         onSuccess={handleHintSuccess}
       />
     </ChallengeLayout>
